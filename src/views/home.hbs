@@ -1,0 +1,34 @@
+<link rel="stylesheet" href="/css/form.css">
+<div class="container" id="loginContainer">
+  <h2>Đăng nhập</h2>
+  <p class="subtext">Chào mừng bạn quay trở lại hệ thống RELIPARK</p>
+
+  <div class="tabs">
+    <button id="userBtn" class="active">Khách hàng</button>
+    <button id="adminBtn" class="inactive">Nhà quản lý</button>
+  </div>
+  <form id="loginForm" onsubmit="handleLogin(event)">
+    <div class="form-group">
+      <span><img src="/img/email.png"></span>
+      <input type="text" id="username" placeholder="Email / Số điện thoại">
+    </div>
+    <div class="form-group">
+      <span><img src="/img/padlock.png"></span>
+      <input type="password" id="password" placeholder="Mật khẩu">
+      <span><img src="/img/hidden.png"></span>
+    </div>
+
+    <div class="form-options">
+      <span>Nhớ mật khẩu</span>
+      <span>Quên mật khẩu?</span>
+    </div>
+    <div class="toggle-switch" id="rememberToggle"></div>
+
+    <button type="submit" class="submit-btn">Tiếp tục</button>
+    <div class="switch-link">
+      Bạn chưa có tài khoản? <a href="register.html">Đăng ký ngay</a>
+    </div>
+  </form>
+</div>
+
+<script src="js/auth.js"></script>

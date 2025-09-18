@@ -1,0 +1,250 @@
+/* Reset */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-touch-callout: none; /* Ngăn menu context trên iOS */
+  -webkit-user-select: none;   /* Ngăn chọn text */
+  user-select: none;
+}
+
+html, body {
+  
+  height: 100%;
+  overflow: hidden;
+  background-color: #e8fee1;
+  font-family: 'Inter', sans-serif;
+  position: relative;
+  touch-action: manipulation; 
+}
+
+/* ========== Intro Splash Circle ========== */
+.circle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  background-color: #93d77e;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  animation: expand 3s ease-out forwards;
+}
+
+@keyframes expand {
+  0% {
+    width: 10px;
+    height: 10px;
+    opacity: 1;
+  }
+  100% {
+    width: 3000px;
+    height: 3000px;
+    opacity: 0;
+  }
+}
+
+.intro {
+  animation: vanish 3s forwards;
+  text-align: center;
+}
+.intro img {
+  margin-top: 200px;
+  width: 250px;
+}
+.intro p {
+  font-family: 'Inter', sans-serif;
+}
+
+/* vanish = ẩn intro */
+@keyframes vanish {
+  0% { opacity: 1; }
+  100% { opacity: 0; visibility: hidden; }
+}
+
+/* ========== Main Content ========== */
+.main-content {
+  opacity: 0;
+}
+.main-content.visible {
+  opacity: 1;
+  transform: translateY(20px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+/* ========== Info Layout ========== */
+.info {
+  width: 100%;
+  max-width: 390px;
+  margin: 0 auto;
+  background: #e3ffe3;
+  border-radius: 30px;
+  padding: 10px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+/* Icon home bên trái */
+.home {
+  align-self: flex-start;
+  margin-left: 10px;
+}
+
+/* Loại bỏ dấu chấm trước li */
+.slide img {
+  width: 200px;
+  margin: 0 auto;
+  display: block;
+}
+
+/* Tiêu đề + mô tả */
+.info h2 {
+  font-family: 'Poppins', sans-serif;
+  font-weight: bold;
+  font-size: 30px;
+  margin: 10px 0;
+}
+.info p {
+  font-family: 'Poppins', sans-serif;
+  font-size: 18px;
+  width: 250px;
+  margin: 10px auto;
+}
+
+/* ========== Progress Indicator ========== */
+.progress-indicator {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 30px 0;
+}
+.bar {
+  width: 60px;
+  height: 12px;
+  background: #00135c;
+  border-radius: 10px;
+}
+.dot {
+  width: 12px;
+  height: 12px;
+  background: #00135c;
+  border-radius: 10px;
+}
+
+/* ========== Button & Arrow ========== */
+.next-button {
+  background: #00d562;
+  color: white;
+  font-weight: 600;
+  font-size: 16px;
+  padding: 14px 40px;
+  border: none;
+  border-radius: 30px;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+  margin-bottom: 30px;
+  cursor: pointer;
+}
+.back-arrow {
+  font-size: 24px;
+  color: #00135c;
+  margin-bottom: 20px;
+  cursor: pointer;
+}
+
+.nav-tabs li a {
+  display: block;
+  padding: 6px 10px;
+  text-decoration: none;
+  position: relative;
+  color: #000;
+}
+
+.nav-tabs li a::after {
+  content: "";
+  height:  3px;
+  width: 100%;
+  position: absolute;
+  left: 0px;
+  bottom: -3px;
+  background: transparent;
+}
+
+.nav-tabs li.active a::after, .nav-tabs li:hover a::after {
+  background: #e74c3c;
+}
+
+.slide {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+}
+
+.slide.active {
+  display: flex;
+
+
+}
+
+.slide img {
+  width: 200px;
+}
+
+.slide h2 {
+  color: #003366;
+  margin-bottom: 10px;
+}
+
+.slide p {
+  color: #333;
+  font-size: 18px;
+}
+
+.controls {
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 20px;
+}
+
+.controls button {
+  width: 120px;
+  height: 50px;
+  background-color: #00cc66;
+  border: none;
+  margin: 10px auto;
+  padding: 10px 16px;
+  border-radius: 25px;
+  color: white;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 18px;
+  transition: 0.2s;
+}
+
+.controls .prev {
+  background: none;
+  color: #000;
+}
+
+.dots {
+  height: 10px;
+  display: flex;
+  gap: 5px;
+  border-radius: 5px; 
+  
+}
+.dot.active {
+  width: 65px;
+}
+/* .slide.active {
+  opacity: 1;
+  transition: opacity 0.5s ease-in-out;
+} */
+.dot:not(.active) {
+  width: 12px;
+}
