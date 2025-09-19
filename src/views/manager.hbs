@@ -62,7 +62,15 @@
             
         <div class="parking-card parking-history">
             
-            
+              <!-- Form tìm kiếm & xóa -->
+            <div class="booking-actions">
+                <input type="text" id="searchCode" placeholder="Nhập mã vé để tìm hoặc xóa">
+                <button onclick="searchBooking()">🔍 Tìm</button>
+                <button onclick="deleteBooking()">🗑 Xóa</button>
+            </div>
+
+            <div id="searchResult" class="search-result"></div>
+
             
                 <!-- Nội dung lịch sử sẽ được thêm ở đây -->
             <table border="1" cellpadding="8" cellspacing="0">

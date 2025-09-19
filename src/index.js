@@ -193,6 +193,37 @@ app.get("/manager", async (req, res) => {
     res.status(500).send("Lỗi server khi lấy booking");
   }
 });
+
+// Tìm booking theo mã code
+app.get("/api/manager/:code", async (req, res) => {
+  try {
+    const booking = await Booking.findOne({ bookingCode: req.params.code })
+      .populate("userId", "fullname")
+      .lean();
+
+    if (!booking) return res.status(404).json({ message: "Không tìm thấy mã này" });
+
+    booking.createdAt = new Date(booking.createdAt).toLocaleString("vi-VN");
+    res.json(booking);
+  } catch (err) {
+    console.error("❌ Lỗi tìm booking:", err);
+    res.status(500).json({ message: "Lỗi server" });
+  }
+});
+
+// Xóa booking theo mã code
+app.delete("/api/manager/:code", async (req, res) => {
+  try {
+    const result = await Booking.findOneAndDelete({ bookingCode: req.params.code });
+    if (!result) return res.status(404).json({ message: "Không tìm thấy mã này để xóa" });
+
+    res.json({ message: "Xóa thành công", deleted: result });
+  } catch (err) {
+    console.error("❌ Lỗi xóa booking:", err);
+    res.status(500).json({ message: "Lỗi server" });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`)
 })
