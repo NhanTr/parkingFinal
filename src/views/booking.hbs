@@ -1,0 +1,15 @@
+<link rel="stylesheet" href="/css/booking.css">
+
+<div id="booking-screen" class="screen active">
+  <iframe id="hidden_iframe" name="hidden_iframe"
+          onload="if(submitted){ alert('Bạn đã gửi thông tin thành công!'); submitted=false; }"
+          style="display:none;">
+  </iframe>
+
+  <form id="bookingForm" target="hidden_iframe" method="GET"
+        action="https://script.google.com/macros/s/AKfycbyxWUC6gDV4n7vNhDufTh5RxkXVSSYD07d-sz26XAPcopsVCftVaWHR9nSZGZRViYbG/exec">
+
+      
+  </form>
+</div>
+<script src="js/booking.js"></script>

@@ -1,14 +1,42 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Relipark - Đăng ký</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/form.css">
-</head>
-<body>
-  
-  <script src="js/auth.js"></script>
-</body>
-</html>
+<link rel="stylesheet" href="/css/form.css">
+<div class="container" id="registerContainer">
+    <h2>Đăng ký</h2>
+    <p class="subtext">Tạo tài khoản mới để sử dụng dịch vụ RELIPARK</p>
+
+    <form id="registerForm" onsubmit="handleRegister(event)" action="/register" method="POST">
+      <div class="form-group">
+        <span><img src="img/user.png"></span>
+        <input type="text" name="fullname" placeholder="Họ và Tên" required>
+      </div>
+
+      <div class="form-group">
+        <span><img src="img/email.png"></span>
+        <input type="email" name="email" placeholder="Email" required>
+      </div>
+
+      <div class="form-group">
+        <span><img src="img/phone_call.png"></span>
+        <input type="tel" name="phone" placeholder="Số điện thoại" required>
+      </div>
+
+      <div class="form-group">
+        <span><img src="img/padlock.png"></span>
+        <input type="password" name="password" placeholder="Mật khẩu" required>
+        <span><img src="img/hidden.png"></span>
+      </div>
+
+      <div class="form-group">
+        <span><img src="img/license-plate.png"></span>
+        <input type="text" name="plate" placeholder="Biển số xe" required>
+      </div>
+
+      <button type="submit" class="submit-btn">Đăng ký</button>
+
+      <div class="switch-link">
+        Bạn đã có tài khoản? <a href="/login">Đăng nhập ngay</a>
+      </div>
+    </form>
+
+  </div>
+
+<script src="js/auth.js"></script>

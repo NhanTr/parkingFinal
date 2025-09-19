@@ -1,0 +1,49 @@
+<link rel="stylesheet" href="/css/parking.css">
+<div id="parking-screen" class="screen active">
+  <div class="card parking-card">
+    <div class="header">
+      <img src="img/logo.png" alt="Logo">
+      <div class="right-side">
+        <div>
+          <div id="currentDate"></div>
+          <div id="currentTime"></div>
+        </div>
+        <a href="/"><img src="img/logout.png" alt="Đăng xuất"></a>
+      </div>
+    </div>
+    <p>{{user.fullname}}</p>
+    <p><img src="img/location.png" alt=""> <strong>Địa chỉ:</strong> 97 Man Thiện, TP. Thủ Đức</p>
+    <p><img src="img/clock.png" alt=""> <strong>Giờ hoạt động:</strong> 6:00 - 22:00</p>
+    <p><img src="img/money_bag.png" alt=""> 
+       <strong>Giá:</strong> 10.000đ/h (6:00-17:59), 15.000đ/h (18:00-22:00)
+    </p>
+    <p><img src="img/post_it.png" alt=""> 
+       <strong class="warning">Lưu ý:</strong> Nếu đến trễ hơn 15 phút, hệ thống sẽ tự động huỷ chỗ.
+    </p>
+
+    <div class="parking-slot">
+      <div class="slot-buttons">
+        <button>A1</button>
+        <button>A2</button>
+        <button>A3</button>
+        <button>A4</button>
+      </div>
+      <div class="slot-status">
+        <h3>Chỗ khả dụng 0/4</h3>
+        <div class="legend">
+          <span class="available"></span> Còn trống
+        </div>
+        <div class="legend">
+          <span class="occupied"></span> Đã đỗ
+        </div>
+      </div>
+    </div>
+    <div class="booking-card">
+        <input id="license_plate" name="license_plate" type="text" required placeholder="Biển số xe">
+        <button type="submit" id="bookBtn" class="button"> Đặt chỗ </button>
+    </div>
+  </div>
+</div>
+
+<script src="js/parking.js"></script>
+<script src="js/auth.js"></script>

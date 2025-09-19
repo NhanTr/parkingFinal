@@ -1,0 +1,79 @@
+/* ==== Layout chung ==== */
+body {
+  margin: 0;
+  font-family: 'Poppins', sans-serif;
+  background-color: #e8fee1;
+}
+
+
+
+.screen {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+}
+.screen.active {
+  display: flex;
+}
+
+/* ==== Booking Card ==== */
+.booking-card {
+  background: white;
+  border-radius: 20px;
+  padding: 30px 20px;
+  width: 360px;
+  text-align: center;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.booking-card h2 {
+  color: #020E69;
+  font-size: 22px;
+  margin-bottom: 15px;
+}
+
+.booking-card img {
+  width: 200px;
+  margin: 10px auto 20px;
+  display: block;
+}
+
+/* ==== Form Group ==== */
+.form-group {
+  margin-bottom: 15px;
+  position: relative;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 15px;
+  border: 1px solid #ddd;
+  border-radius: 25px;
+  font-size: 16px;
+  box-sizing: border-box;
+  outline: none;
+}
+.form-group input:focus {
+  border-color: #001f8d;
+}
+
+/* ==== Button ==== */
+.button.primary {
+  display: block;
+  width: 100%;
+  padding: 12px 20px;
+  font-size: 18px;
+  border-radius: 25px;
+  border: none;
+  background-color: #4CAF50;
+  color: white;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  margin-top: 15px;
+  transition: background 0.2s ease-in;
+}
+.button.primary:hover {
+  background-color: #43a047;
+}

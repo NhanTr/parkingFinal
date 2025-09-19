@@ -1,0 +1,116 @@
+
+/* ==== Layout chung ==== */
+body {
+    margin: 0;
+    font-family: 'Poppins', sans-serif;
+    background-color: #e8fee1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.screen {
+    display: none;
+    width: 100%;
+    max-width: 420px;
+}
+
+.screen.active {
+    display: block;
+}
+
+/* ==== Card chung ==== */
+.card {
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    padding: 25px;
+    text-align: center;
+    align-items: center;
+}
+
+.card img[alt="logo"] {
+    width: 100px;
+    margin-bottom: 10px;
+}
+
+.card > p:first-of-type {
+    color: #555;
+    margin-bottom: 25px;
+    font-size: 14px;
+}
+
+/* ==== Nội dung xác nhận ==== */
+.content h2 {
+    color: #001f8d;
+    margin-top: 0;
+    margin-bottom: 20px;
+    font-size: 22px;
+}
+
+.content p {
+    display: flex;
+    align-items: center;
+    margin: 15px 0;
+    font-size: 15px;
+}
+
+.content p img {
+    width: 20px;
+    margin-right: 10px;
+}
+
+.content p strong {
+    color: #333;
+}
+
+/* ==== Ghi chú ==== */
+.note {
+    background-color: #fff9e6;
+    border-left: 4px solid #ffc107;
+    padding: 12px 15px;
+    margin: 20px 0;
+    border-radius: 4px;
+    text-align: left;
+}
+
+.note p {
+    margin: 0;
+    color: #e65100;
+    font-size: 14px;
+}
+
+/* ==== Hàng nút bấm ==== */
+.row {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 25px;
+}
+
+.button {
+    padding: 12px 25px;
+    border-radius: 8px;
+    border: none;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.button:first-child {
+    background-color: #3ab575;
+    color: #ffffff;
+}
+
+.button.green {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.button:hover {
+    opacity: 0.9;
+    transform: translateY(-2px);
+}

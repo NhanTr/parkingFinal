@@ -1,0 +1,183 @@
+/* ==== Layout chung ==== */
+body {
+    margin: 0;
+    font-family: 'Poppins', sans-serif;
+    background-color: #e8fee1;
+}
+
+.screen {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+}
+.screen.active {
+  display: flex;
+}
+
+.parking-card {
+    background: none;
+    border-radius: 20px;
+    border: 0px;
+    max-width: 360px;
+    width: 100%;
+}
+
+/* ==== Header ==== */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.header img {
+  width: 100px;
+}
+.right-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.right-side img {
+  width: 30px;
+  height: 30px;
+}
+
+#currentDate,
+#currentTime {
+  text-align: right;
+  font-size: 14px;
+  color: #333;
+}
+
+/* ==== Thông tin bãi đỗ ==== */
+.parking-card h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 15px;
+}
+.parking-card h2 img {
+    width: 50px;
+}
+.parking-card p {
+    margin: 5px 0;
+    font-size: 15px;
+}
+.parking-card p img {
+  width: 20px;
+  margin-right: 8px;
+}
+.warning {
+  color: rgb(253, 80, 0);
+}
+
+/* ==== Slot bãi đỗ ==== */
+.parking-slot {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 15px;
+  margin: 20px 0;
+}
+
+.slot-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    max-width: 180px;
+    padding-left: 20px;
+}
+.slot-buttons button {
+    width: 65px;
+    height: 65px;
+    font-size: 18px;
+    border: none;
+    border-radius: 10px;
+    background-color: #f44336;
+    color: white;
+    cursor: not-allowed;
+}
+
+.slot-status h3 {
+    margin-bottom: 10px;
+    font-size: 16px;
+}
+
+.legend {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+.legend span {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+}
+.legend .available {
+    background-color: green;
+}
+.legend .occupied {
+    background-color: red;
+}
+
+/* ==== Nút hành động ==== */
+.button.primary {
+    display: block;
+    padding: 12px 20px;
+    font-size: 16px;
+    border-radius: 8px;
+    border: none;
+    background-color: #001f8d;
+    color: white;
+    text-align: center;
+    text-decoration: none;
+    margin: 20px auto 0;
+    transition: background 0.2s ease-in;
+}
+.button.primary:hover {
+    background-color: #0029c6;
+}
+
+.booking-card {
+  padding: 30px 20px;
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  gap: 15px;
+}
+
+/* Input full width */
+.booking-card input {
+  display: block;
+  width: 100%;               /* full chiều ngang khung */
+  padding: 0px 30px;              /* tự động canh giữa */
+  margin: 10px 0;
+  border: 1px solid #ddd;
+  border-radius: 15px;
+  font-size: 16px;
+  box-sizing: border-box;
+  outline: none;
+}
+.booking-card input:focus {
+  border-color: #001f8d;
+}
+
+/* Button full width giống input */
+.booking-card button {
+  display: block;
+  width: 150px;              /* bằng input */
+  padding: 5px;
+  margin: 10px 0;
+  font-size: 16px;
+  border-radius: 15px;
+  border: none;
+  background-color: #4CAF50;
+  color: white;
+  cursor: pointer;
+  transition: background 0.2s ease-in;
+}
+.booking-card button:hover {
+  background-color: #43a047;
+}

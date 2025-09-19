@@ -1,0 +1,22 @@
+<link rel="stylesheet" href="/css/confirm.css">
+<div id="confirm-screen" class="screen active">
+  <div class="card confirm-card">
+    <img src="img/logo.png" alt="logo">
+    <p>Smart parking system</p>
+
+    <div class="content">
+      <h2> Vé đặt chỗ </h2>
+      <h3>Mã vào là: {{bookingCode}}</h3>
+      <p>Khách hàng: {{user.fullname}}</p>
+      <p><img src="img/rho.png" alt=""><strong>Bãi đỗ xe RL</strong></p>
+      <p><img src="img/location.png" alt="">97 Man Thiện, TP. Thủ Đức</p>
+      <div class="note">
+        <p> - Chụp ảnh màn hình để xác nhận với nhà xe.</p>
+        <p> - Nếu đến trễ hơn 30 phút, hệ thống sẽ tự động hủy chỗ.</p>
+      </div>
+
+      <a href="/parking"><button class="button"> Quay lại trang đặt chỗ </button></a>
+    </div>
+  </div>
+</div>
+<script src="js/confirm.js"></script>
