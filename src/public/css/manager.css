@@ -1,163 +1,226 @@
-body {
+/* ==== RESET & BASE STYLES ==== */
+* {
     margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
     font-family: 'Poppins', sans-serif;
     background-color: #e8fee1;
+    color: #333;
+    line-height: 1.6;
 }
-.frame {
-    display: none;
-    flex-direction: column;
-    align-items: center;
-    padding: 20px;
-}
-.active {
-    display: flex;
-}
-.card {
-    background: none;
-    border-radius: 20px;
-    max-width: 400px;
-    width: 100%;
-}
+
+/* ==== Header ==== */
 .header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-
 }
 .header img {
-    width: 100px;
+  width: 100px;
 }
-.right_side img {
-    padding-left: 10px;
+.right-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.right-side img {
+  width: 30px;
+  height: 30px;
+}
+
+#currentDate,
+#currentTime {
+  text-align: right;
+  font-size: 14px;
+  color: #333;
+}
+
+
+/* ==== LAYOUT ==== */
+.parking-container {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.parking-frame {
+    display: flex;
+    width: 100%;
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+.parking-frame.active {
+    display: flex;
+    gap: 20px;
+}
+
+/* ==== CARD COMPONENT ==== */
+.parking-card {
+    background: white;
+    border-radius: 20px;
+    padding: 25px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    width: 100%;
+}
+
+/* ==== HEADER ==== */
+.parking-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.parking-logo {
+    width: 100px;
+    height: auto;
+}
+
+.parking-header-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.keypad-toggle {
+    background: transparent;
+    border: 2px solid #001f8d;
+    color: #001f8d;
+    padding: 8px 15px;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.keypad-toggle:hover {
+    background: #001f8d;
+    color: white;
+}
+
+.header-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.current-date, .current-time {
+    font-size: 14px;
+    color: #555;
+}
+
+.logout-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    margin-left: 10px;
+}
+
+.logout-icon {
     width: 30px;
     height: 30px;
 }
 
-.current-time {
-    text-align: right;
-    font-size: 14px;
-    color: #333;
-    margin-bottom: 10px;
+/* ==== PARKING INFO ==== */
+.parking-info {
+    display: flex;
+    align-items: center;
+    margin-bottom: 20px;
+    color: #040e65;
+    font-weight: bold;
 }
-.slot {
+
+.parking-icon {
+    width: 20px;
+    margin-right: 10px;
+}
+
+/* ==== SLOTS SECTION ==== */
+.parking-slots {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 20px;
+    margin: 20px 0;
+}
+
+.slot-buttons {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    margin: 20px 0px;
+    gap: 10px;
 }
-.slot button {
-    width: 65px;
-    padding: 20px;
-    margin: 5px;
+
+.slot-btn {
+    width: 100%;
+    padding: 15px 0;
     font-size: 18px;
     border: none;
     border-radius: 10px;
     background-color: #f44336;
     color: white;
     cursor: not-allowed;
-}
-.button {
-    padding: 12px 20px;
-    font-size: 16px;
-    border-radius: 8px;
-    cursor: pointer;
-    border: none;
-    margin-top: 10px;
-}
-.button.primary {
-    background-color: #001f8d;
-    color: white;
-    display: flex;
+    transition: transform 0.2s;
 }
 
-.row {
+.slot-btn:active {
+    transform: scale(0.98);
+}
+
+.slot-status {
     display: flex;
-    justify-content: space-between;
-    margin: 10px 0;
+    flex-direction: column;
+    justify-content: center;
 }
-input {
-    width: 100%;
-    padding: 10px;
-    margin-top: 5px;
-    border-radius: 8px;
-    border: 1px solid #ccc;
-}
-.note {
-    background: #fff3cd;
-    color: #856404;
-    padding: 10px;
-    border-radius: 5px;
-    font-size: 14px;
-    margin-top: 15px;
-}
-.current-time {
-    text-align: right;
-    font-size: 14px;
-    color: #333;
-    margin-bottom: 10px;
-}
-.current-date {
-    text-align: right;
-    font-size: 14px;
-    color: #333;
-}
-.logout {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    background: transparent;
-    border: none;
+
+.available-count {
+    margin-bottom: 15px;
     font-size: 18px;
-    color: red;
-    cursor: pointer;
 }
 
-.right_side {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.card h2 img {
-    width: 50px;
-}
-
-.card p {
-    color: rgb(4, 14, 101);
-    font-weight: bold;
+.status-indicator {
     display: flex;
     align-items: center;
-    gap: 8px;
+    margin: 8px 0;
 }
-p img {
-    width: 20px;
+
+.status-color {
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
     margin-right: 10px;
 }
 
-.card .button.primary {
-    margin: auto;
+.available {
+    background-color: green;
+}
+
+.occupied {
+    background-color: #f44336;
+}
+
+/* ==== GATE CONTROLS ==== */
+.gate-controls {
+    display: flex;
+    justify-content: space-between;
+    margin: 25px 0;
+}
+
+.gate-item {
+    display: flex;
+    flex-direction: column;
     align-items: center;
 }
-.item {
-    display: flex;
-    gap: 10px;
-    text-align: center;
-    margin: 10px;
-}
-.item p {
-    margin: auto;
-    margin-left: 0px;
+
+.gate-title {
+    margin-bottom: 10px;
+    font-size: 18px;
 }
 
-
-
-.header button {
-    border: none;
-    background-color: rgba(0, 0, 0, 0);
-    color: black;
-    margin-top: -28px;
-}
-
-.toggle-switch {
+.gate-switch {
     width: 40px;
     height: 20px;
     background-color: #ccc;
@@ -166,38 +229,163 @@ p img {
     cursor: pointer;
 }
 
-.toggle-switch::before {
-    content: "";
+.gate-switch-handle {
     width: 16px;
     height: 16px;
-    background: red;
+    background: #f44336;
     border-radius: 50%;
     position: absolute;
     top: 2px;
     left: 2px;
-    transition: 0.3s;
+    transition: all 0.3s;
 }
 
-.toggle-switch.active::before {
+.gate-switch.active {
+    background-color: #4CAF50;
+}
+
+.gate-switch.active .gate-switch-handle {
     left: 22px;
-    background: green;
+    background: white;
 }
 
-
-.gate {
-    display: flex;
-    justify-content: space-between;
+/* ==== HISTORY SECTION ==== */
+.parking-history {
+    border-top: 2px solid #ddd;
+    padding-top: 20px;
 }
 
-.history {
-    margin: 0px 20px;
-    border-top: 1px solid black;  
-}
-.history h2 {
+.history-title {
     display: flex;
     align-items: center;
+    margin-bottom: 15px;
 }
-.history img {
-    width: 50px;
+
+.history-icon {
+    width: 30px;
     margin-right: 10px;
+}
+
+/* ==== BUTTONS ==== */
+.parking-btn {
+    padding: 12px 20px;
+    font-size: 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    border: none;
+    transition: all 0.3s;
+}
+
+.btn-primary {
+    background-color: #001f8d;
+    color: white;
+    display: block;
+    margin: 15px auto 0;
+}
+
+.btn-primary:hover {
+    background-color: #0030c6;
+}
+
+/* ==== RESPONSIVE DESIGN ==== */
+@media (max-width: 768px) {
+    .parking-slots {
+        grid-template-columns: 1fr;
+    }
+        
+    .gate-controls {
+        flex-direction: column;
+        gap: 20px;
+    }
+        
+    .parking-header {
+        flex-direction: column;
+        gap: 15px;
+        align-items: flex-start;
+    }
+        
+    .header-info {
+        align-items: flex-start;
+    }
+        
+    .parking-header-controls {
+        width: 100%;
+        justify-content: space-between;
+    }
+}
+
+
+/* ===========================
+   LỊCH SỬ ĐẶT CHỖ CUỘN
+   =========================== */
+.parking-history {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  max-height: 500px;         /* chiều cao tối đa */
+  overflow-y: auto;          /* bật cuộn dọc */
+}
+
+/* Thanh cuộn tuỳ chỉnh */
+.parking-history::-webkit-scrollbar {
+  width: 8px;
+}
+
+.parking-history::-webkit-scrollbar-thumb {
+  background: #001f8d;
+  border-radius: 4px;
+}
+
+.parking-history::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+/* Tiêu đề */
+.parking-history h5 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 20px;
+  font-weight: bold;
+  color: #001f8d;
+  margin-bottom: 15px;
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 2;
+}
+
+/* Bảng */
+.parking-history table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+  background: #fafafa;
+}
+
+.parking-history thead {
+  background-color: #001f8d;
+  color: #fff;
+  position: sticky;
+  top: -20px;   /* giữ header cố định khi cuộn */
+  z-index: 1;
+}
+
+.parking-history th, 
+.parking-history td {
+  padding: 12px 15px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.parking-history tr:nth-child(even) {
+  background-color: #f9f9f9;
+}
+
+
+.parking-history td:first-child {
+  text-align: center;
+  font-weight: bold;
+  color: #4CAF50;
 }

@@ -10,10 +10,11 @@ var morgan = require('morgan')
 require('dotenv').config();
 
 
-const Booking = require("./booking");
+
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const User = require('./user');
+const Booking = require('./booking');
 app.use(express.json()); // parse application/json
 app.use(express.urlencoded({ extended: true })); 
 
@@ -50,8 +51,8 @@ app.use(session({
 app.engine('hbs', engine({
   extname: '.hbs',
 }));
-app.set('view engine', 'hbs');
-app.set('views', path.join(__dirname, 'views'));
+app.set('view engine', 'hbs')
+app.set('views', path.join(__dirname, 'views'))
 
 console.log("PATH: ", path.join(__dirname, 'views'))
 
@@ -69,20 +70,21 @@ app.get('/booking', authMiddleware, (req, res) => {
   res.render('booking');
 })
 app.get('/confirm', (req, res) => {
-  res.render('confirm', { user: req.session.user, bookingCode: req.session.bookingCode });
+  res.render('confirm', { user: req.session.user, bookingCode: req.session.bookingCode })
 })
+
 // API đăng ký
 app.post('/register', async (req, res) => {
   try {
     const { fullname, email, phone, password, plate } = req.body;
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({ fullname, email, phone, password: hashedPassword, plate });
+    const newUser = new User({ fullname, email, phone, password: hashedPassword, plate })
     await newUser.save();
     
-    res.status(201).json({ message: 'Đăng ký thành công' });
+    res.status(201).json({ message: 'Đăng ký thành công' })
   } catch (error) {
     console.error(error);
-    res.status(400).json({ message: 'Lỗi khi đăng ký', error: error.message });
+    res.status(400).json({ message: 'Lỗi khi đăng ký', error: error.message })
   }
 });
 
@@ -129,11 +131,11 @@ async function generateUniqueCode() {
 app.post("/parking", async (req, res) => {
   try {
     if (!req.session.user) {
-      return res.status(401).json({ message: "Chưa đăng nhập" });
+      return res.status(401).json({ message: "Chưa đăng nhập" })
     }
 
     const { license_plate } = req.body;
-    if (!license_plate) return res.status(400).json({ message: "Thiếu biển số xe" });
+    if (!license_plate) return res.status(400).json({ message: "Thiếu biển số xe" })
 
     const bookingCode = await generateUniqueCode();
 
@@ -143,8 +145,9 @@ app.post("/parking", async (req, res) => {
       bookingCode
     });
 
-    await newBooking.save();
-
+  console.log("About to save booking:", newBooking);
+  await newBooking.save();
+  console.log("Booking saved to DB!");
 
     // Lưu vào session để dùng ở trang sau
     req.session.bookingCode = bookingCode;
@@ -174,6 +177,22 @@ function authMiddleware(req, res, next) {
   });
 }
 
+app.get("/manager", async (req, res) => {
+  try {
+    // lấy tất cả booking, populate fullname từ User
+    const bookings = await Booking.find()
+      .populate("userId", "fullname")
+      .sort({ createdAt: -1 }) // mới nhất trước
+      .lean();
+    bookings.forEach(b => {
+    b.createdAt = new Date(b.createdAt).toLocaleString("vi-VN");
+    });
+    res.render("manager", { bookings });
+  } catch (err) {
+    console.error("❌ Lỗi lấy booking:", err);
+    res.status(500).send("Lỗi server khi lấy booking");
+  }
+});
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`)
 })

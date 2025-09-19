@@ -1,0 +1,91 @@
+<link rel="stylesheet" href="/css/manager.css">
+<div class="parking-container">
+    <div id="parking-frame" class="parking-frame active">
+        <div class="parking-card">
+            <div class="header">
+            <img src="img/logo.png" alt="Logo">
+            <div class="right-side">
+                <div>
+                <div id="currentDate"></div>
+                <div id="currentTime"></div>
+                </div>
+                <a href="/"><img src="img/logout.png" alt="Đăng xuất"></a>
+            </div>
+        </div>
+                
+        <div class="parking-info">
+            <img src="img/rho.png" alt="Icon bãi đỗ" class="parking-icon">
+            <span>Bãi đỗ xe RL</span>
+        </div>
+                
+        <div class="parking-slots">
+            <div class="slot-buttons">
+                <button class="slot-btn">A1</button>
+                <button class="slot-btn">A2</button>
+                <button class="slot-btn">A3</button>
+                <button class="slot-btn">A4</button>
+            </div>
+                        
+            <div class="slot-status">
+                <h3 class="available-count">Chỗ khả dụng: 0/4</h3>
+                            
+                <div class="status-indicator">
+                    <div class="status-color available"></div>
+                    <p>Còn trống</p>
+                </div>
+                            
+                <div class="status-indicator">
+                    <div class="status-color occupied"></div>
+                    <p>Đã đỗ</p>
+                </div>
+            </div>
+        </div>
+                
+        <div class="gate-controls">
+            <div class="gate-item">
+                <h3 class="gate-title">Cổng 1</h3>
+                <div class="gate-switch" id="gateSwitch1">
+                    <div class="gate-switch-handle"></div>
+                </div>
+            </div>
+                    
+            <div class="gate-item">
+                <h3 class="gate-title">Cổng 2</h3>
+                    <div class="gate-switch" id="gateSwitch2">
+                    <div class="gate-switch-handle"></div>
+                    </div>
+                </div>
+            </div>
+                
+            <button class="parking-btn btn-primary">Cập nhật trạng thái</button>
+        </div>
+            
+        <div class="parking-card parking-history">
+            
+            
+            
+                <!-- Nội dung lịch sử sẽ được thêm ở đây -->
+            <table border="1" cellpadding="8" cellspacing="0">
+                <thead>
+                    <tr>
+                    <th>Mã vé</th>
+                    <th>Khách hàng</th>
+                    <th>Biển số xe</th>
+                    <th>Ngày đặt</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{#each bookings}}
+                    <tr>
+                        <td>{{this.bookingCode}}</td>
+                        <td>{{this.fullname}}</td>
+                        <td>{{this.license_plate}}</td>
+                        <td>{{this.createdAt}}</td>
+                    </tr>
+                    {{/each}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<script src="js/manager.js"></script>
