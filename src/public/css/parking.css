@@ -181,3 +181,18 @@ body {
 .booking-card button:hover {
   background-color: #43a047;
 }
+
+/* ==== Trạng thái của từng slot ==== */
+.slot-buttons button.available {
+  background-color: green;   /* còn trống */
+  cursor: default;
+}
+.slot-buttons button.occupied {
+  background-color: red;     /* đã đỗ */
+  cursor: default;
+}
+.slot-buttons button.reserved {
+  background-color: orange;  /* đã đặt trước */
+  cursor: default;
+}
+

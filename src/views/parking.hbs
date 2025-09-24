@@ -23,21 +23,25 @@
 
     <div class="parking-slot">
       <div class="slot-buttons">
-        <button>A1</button>
-        <button>A2</button>
-        <button>A3</button>
-        <button>A4</button>
+        <button id="slot-A1">A1</button>
+        <button id="slot-A2">A2</button>
+        <button id="slot-A3">A3</button>
+        <button id="slot-A4">A4</button>
       </div>
       <div class="slot-status">
-        <h3>Chỗ khả dụng 0/4</h3>
+        <h3 id="availableText">Chỗ khả dụng 0/4</h3>
         <div class="legend">
           <span class="available"></span> Còn trống
         </div>
         <div class="legend">
           <span class="occupied"></span> Đã đỗ
         </div>
+        <div class="legend">
+          <span class="reserved"></span> Đặt trước
+        </div>
       </div>
     </div>
+    
     <div class="booking-card">
         <input id="license_plate" name="license_plate" type="text" required placeholder="Biển số xe">
         <button type="submit" id="bookBtn" class="button"> Đặt chỗ </button>
