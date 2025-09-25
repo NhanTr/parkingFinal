@@ -8,6 +8,7 @@ const { create, engine } = require('express-handlebars');
 const session = require('express-session');
 const jwt = require("jsonwebtoken");
 const bcrypt = require('bcryptjs');
+const RfidAccess = require('./rfidAccess');
 var morgan = require('morgan')
 require('dotenv').config();
 
@@ -70,7 +71,6 @@ let currentStatus = {
     exitGateOpen: false,
     lastUpdate: new Date().toLocaleTimeString('vi-VN'),
     isAdminMode: false,
-    isKeypadMode: true,
     slots: [0, 0, 0, 0]  // 0: available, 1: occupied, 2: reserved
 };
 
@@ -110,7 +110,6 @@ function sendStatusUpdateToESP32() {
                 entryGateOpen: currentStatus.entryGateOpen,
                 exitGateOpen: currentStatus.exitGateOpen,
                 isAdminMode: currentStatus.isAdminMode,
-                isKeypadMode: currentStatus.isKeypadMode,
                 lastUpdate: new Date().toLocaleTimeString('vi-VN')
             },
             timestamp: new Date().toISOString()
@@ -129,11 +128,11 @@ function getSlotIndex(slotId) {
     return map[slotId] !== undefined ? map[slotId] : -1;
 }
 
-// WebSocket Server
+// WebSocket Server - RFID Only Implementation
 wss.on('connection', (ws) => {
     console.log('New WebSocket connection established');
 
-    ws.on('message', (message) => {
+    ws.on('message', async (message) => {
         try {
             const data = JSON.parse(message.toString());
             console.log('Received from client:', data);
@@ -175,6 +174,152 @@ wss.on('connection', (ws) => {
                 }
             }
 
+            //============ RFID ACCESS=============//
+            // Xử lý dữ liệu RFID access từ ESP32
+            if (data.type === 'rfid_access') {
+                console.log('🏷️ Received RFID access data from ESP32:', data);
+                
+                try {
+                    const { rfidCode, action, timestamp, slotUsed } = data.data || data;
+                    
+                    if (action === 'ENTER' || action === 'Entry') {
+                        // Kiểm tra xem thẻ này có đang trong session active không
+                        const existingAccess = await RfidAccess.findOne({
+                            rfidCode: rfidCode,
+                            status: 'ACTIVE'
+                        });
+
+                        if (existingAccess) {
+                            console.log(`⚠️ RFID ${rfidCode} already has active session`);
+                            // Gửi cảnh báo về ESP32
+                            if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
+                                esp32Connection.send(JSON.stringify({
+                                    type: 'rfid_response',
+                                    data: {
+                                        rfidCode: rfidCode,
+                                        status: 'ERROR',
+                                        message: 'Already has active session'
+                                    },
+                                    timestamp: new Date().toISOString()
+                                }));
+                            }
+                            return;
+                        }
+
+                        // Tạo record mới cho lượt vào
+                        const newAccess = new RfidAccess({
+                            rfidCode: rfidCode,
+                            entryTime: timestamp ? new Date(timestamp) : new Date(),
+                            slotUsed: slotUsed && slotUsed !== 'Unknown' ? slotUsed : null,
+                            status: 'ACTIVE'
+                        });
+
+                        await newAccess.save();
+                        console.log(`✅ RFID entry recorded: ${rfidCode} at ${newAccess.entryTime}`);
+
+                        // Gửi xác nhận về ESP32
+                        if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
+                            esp32Connection.send(JSON.stringify({
+                                type: 'rfid_response',
+                                data: {
+                                    rfidCode: rfidCode,
+                                    status: 'ENTRY_RECORDED',
+                                    message: 'Entry recorded successfully',
+                                    entryTime: newAccess.entryTime,
+                                    accessId: newAccess._id
+                                },
+                                timestamp: new Date().toISOString()
+                            }));
+                        }
+
+                        // Broadcast thông tin entry tới web clients
+                        broadcastToWebClients({
+                            type: 'rfid_entry',
+                            data: {
+                                rfidCode: rfidCode,
+                                entryTime: newAccess.entryTime,
+                                slotUsed: slotUsed
+                            },
+                            timestamp: new Date().toISOString()
+                        });
+
+                    } else if (action === 'EXIT' || action === 'Exit') {
+                        // Tìm session active của thẻ này
+                        const activeAccess = await RfidAccess.findOne({
+                            rfidCode: rfidCode,
+                            status: 'ACTIVE'
+                        });
+
+                        if (!activeAccess) {
+                            console.log(`⚠️ No active session found for RFID ${rfidCode}`);
+                            return;
+                        }
+
+                        // Cập nhật thời gian ra và tính phí
+                        activeAccess.exitTime = timestamp ? new Date(timestamp) : new Date();
+                        activeAccess.status = 'COMPLETED';
+                        
+                        // Tính thời gian đỗ xe (phút)
+                        const durationMs = activeAccess.exitTime - activeAccess.entryTime;
+                        activeAccess.duration = Math.ceil(durationMs / (1000 * 60));
+                        
+                        // Tính phí đỗ xe
+                        activeAccess.parkingFee = activeAccess.calculateParkingFee();
+
+                        await activeAccess.save();
+                        console.log(`✅ RFID exit recorded: ${rfidCode}, Duration: ${activeAccess.duration}min, Fee: ${activeAccess.parkingFee}VND`);
+
+                        // Gửi thông tin phí về ESP32
+                        if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
+                            esp32Connection.send(JSON.stringify({
+                                type: 'rfid_response',
+                                data: {
+                                    rfidCode: rfidCode,
+                                    status: 'EXIT_RECORDED',
+                                    message: 'Exit recorded successfully',
+                                    entryTime: activeAccess.entryTime,
+                                    exitTime: activeAccess.exitTime,
+                                    duration: activeAccess.duration,
+                                    fee: activeAccess.parkingFee,
+                                    accessId: activeAccess._id
+                                },
+                                timestamp: new Date().toISOString()
+                            }));
+                        }
+
+                        // Broadcast thông tin exit tới web clients
+                        broadcastToWebClients({
+                            type: 'rfid_exit',
+                            data: {
+                                rfidCode: rfidCode,
+                                entryTime: activeAccess.entryTime,
+                                exitTime: activeAccess.exitTime,
+                                duration: activeAccess.duration,
+                                fee: activeAccess.parkingFee,
+                                slotUsed: activeAccess.slotUsed
+                            },
+                            timestamp: new Date().toISOString()
+                        });
+                    }
+
+                } catch (error) {
+                    console.error('❌ Error processing RFID access:', error);
+                    
+                    // Gửi lỗi về ESP32
+                    if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
+                        esp32Connection.send(JSON.stringify({
+                            type: 'rfid_response',
+                            data: {
+                                rfidCode: data.data?.rfidCode || 'Unknown',
+                                status: 'ERROR',
+                                message: 'Database error: ' + error.message
+                            },
+                            timestamp: new Date().toISOString()
+                        }));
+                    }
+                }
+            }
+
             // Xử lý dữ liệu status từ ESP32
             if (data.type === 'status') {
                 console.log('📊 Received status data from ESP32:', JSON.stringify(data, null, 2));
@@ -198,9 +343,8 @@ wss.on('connection', (ws) => {
                 if (statusData.exitGateOpen !== undefined) currentStatus.exitGateOpen = statusData.exitGateOpen;
                 if (statusData.lastUpdate !== undefined) currentStatus.lastUpdate = statusData.lastUpdate;
                 if (statusData.isAdminMode !== undefined) currentStatus.isAdminMode = statusData.isAdminMode;
-                if (statusData.isKeypadMode !== undefined) currentStatus.isKeypadMode = statusData.isKeypadMode;
 
-                console.log('📄 Updated current status:', {
+                console.log('🔍 Updated current status:', {
                     availableSlots: currentStatus.availableSlots,
                     totalSlots: currentStatus.totalSlots,
                     slots: currentStatus.slots,
@@ -208,10 +352,7 @@ wss.on('connection', (ws) => {
                         entry: currentStatus.entryGateOpen,
                         exit: currentStatus.exitGateOpen
                     },
-                    modes: {
-                        admin: currentStatus.isAdminMode,
-                        keypad: currentStatus.isKeypadMode
-                    }
+                    adminMode: currentStatus.isAdminMode
                 });
 
                 // Broadcast trạng thái mới
@@ -275,27 +416,7 @@ wss.on('connection', (ws) => {
                 console.log('✅ History data broadcasted to', webClients.size, 'web clients');
             }
 
-            // Xử lý trạng thái keypad từ ESP32
-            if (data.type === 'keypadStatus' || data.type === 'keypad_status') {
-                console.log('⌨️ Received keypad status from ESP32:', data);
-                
-                const keypadData = data.data || data;
-                if (keypadData.isKeypadMode !== undefined) {
-                    currentStatus.isKeypadMode = keypadData.isKeypadMode;
-                }
-                if (keypadData.isAdminMode !== undefined) {
-                    currentStatus.isAdminMode = keypadData.isAdminMode;
-                }
-
-                broadcastToWebClients({
-                    type: 'keypadStatus',
-                    data: keypadData,
-                    timestamp: new Date().toISOString()
-                });
-                console.log('✅ Keypad status broadcasted');
-            }
-
-            // Xử lý yêu cầu đặt chỗ từ manager.js
+            //========== Xử lý yêu cầu đặt chỗ từ manager.js ==========//
             if (data.type === 'reserve_slot') {
                 const slotId = data.slotId;  // e.g., 'A1'
                 const index = getSlotIndex(slotId);
@@ -439,6 +560,7 @@ wss.on('connection', (ws) => {
                     }));
                 }
             }
+            //=====================================//
 
             // Xử lý yêu cầu điều khiển gate
             if (data.type === 'gate_control') {
@@ -745,8 +867,6 @@ app.delete("/api/manager/:code", async (req, res) => {
     res.status(500).json({ message: "Lỗi server" });
   }
 });
-
-// ============ NEW API ENDPOINTS FROM SERVER.JS ============
 
 // API endpoints cho parking status
 app.get('/api/parking-status', (req, res) => {
