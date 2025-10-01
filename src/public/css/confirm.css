@@ -114,3 +114,102 @@ body {
     opacity: 0.9;
     transform: translateY(-2px);
 }
+
+/* ...existing code... */
+
+.payment-section {
+  margin: 20px 0;
+  padding: 16px;
+  background: #f7f7f7;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  text-align: left;
+}
+
+#start-payment-btn {
+  background: #1e90ff;
+  color: #fff;
+  border: none;
+  padding: 10px 22px;
+  border-radius: 5px;
+  font-size: 16px;
+  cursor: pointer;
+  margin-bottom: 10px;
+  transition: background 0.2s;
+}
+
+#start-payment-btn:disabled {
+  background: #aaa;
+  cursor: not-allowed;
+}
+
+#payment-info p {
+  margin: 6px 0;
+  font-size: 15px;
+}
+
+#total-amount {
+  font-weight: bold;
+  color: #e53935;
+}       
+
+/* ...existing code... */
+
+.note-section {
+  margin: 22px 0 18px 0;
+  padding: 16px 18px;
+  background: #f7fff0;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(66, 168, 68, 0.07);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.note-section label {
+  font-size: 16px;
+  color: #388e3c;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+#noteInput {
+  width: 100%;
+  min-height: 60px;
+  font-size: 15px;
+  padding: 10px 12px;
+  border: 1.5px solid #bcdffb;
+  border-radius: 7px;
+  resize: vertical;
+  background: #fafff6;
+  transition: border 0.2s;
+}
+
+#noteInput:focus {
+  border-color: #42a844;
+  outline: none;
+}
+
+#saveNoteBtn {
+  align-self: flex-end;
+  background: #42a844;
+  color: #fff;
+  border: none;
+  padding: 8px 22px;
+  border-radius: 7px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+  margin-top: 4px;
+}
+
+#saveNoteBtn:hover {
+  background: #2e7d32;
+}
+
+#noteStatus {
+  min-height: 18px;
+  margin-top: 4px;
+  font-size: 14px;
+}

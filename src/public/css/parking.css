@@ -139,60 +139,95 @@ body {
     background-color: #0029c6;
 }
 
-.booking-card {
-  padding: 30px 20px;
-  max-width: 420px;
-  width: 100%;
-  text-align: center;
+/* ...existing code... */
+
+/* ==== Đặt chỗ & Tra cứu mã vé - Giao diện đẹp, đồng bộ ==== */
+.booking-card,
+.booking-fee-lookup {
+  padding: 18px 20px;
+  background: #eaffea;
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(30, 144, 255, 0.05);
+  max-width: 520px;
+  margin: 18px auto 0 auto;
+  text-align: left;
   display: flex;
-  gap: 15px;
+  flex-direction: column;
+  gap: 12px;
 }
 
-/* Input full width */
-.booking-card input {
-  display: block;
-  width: 100%;               /* full chiều ngang khung */
-  padding: 0px 30px;              /* tự động canh giữa */
-  margin: 10px 0;
-  border: 1px solid #ddd;
-  border-radius: 15px;
+.booking-card .booking-form,
+.booking-card .lookup-form {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.booking-card input,
+.booking-fee-lookup input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1.5px solid #bcdffb;
+  border-radius: 7px;
   font-size: 16px;
-  box-sizing: border-box;
+  background: #f8fff8;
+  transition: border 0.2s;
+}
+
+.booking-card input:focus,
+.booking-fee-lookup input:focus {
+  border-color: #42a844;
   outline: none;
 }
-.booking-card input:focus {
-  border-color: #001f8d;
-}
 
-/* Button full width giống input */
-.booking-card button {
-  display: block;
-  width: 150px;              /* bằng input */
-  padding: 5px;
-  margin: 10px 0;
-  font-size: 16px;
-  border-radius: 15px;
+.booking-card button,
+.booking-fee-lookup button {
+  background: #42a844;
+  color: #fff;
   border: none;
-  background-color: #4CAF50;
-  color: white;
+  padding: 10px 22px;
+  border-radius: 7px;
+  font-size: 16px;
+  font-weight: 500;
   cursor: pointer;
-  transition: background 0.2s ease-in;
-}
-.booking-card button:hover {
-  background-color: #43a047;
+  transition: background 0.2s;
+  box-shadow: 0 1px 4px rgba(66, 168, 68, 0.08);
 }
 
-/* ==== Trạng thái của từng slot ==== */
-.slot-buttons button.available {
-  background-color: green;   /* còn trống */
-  cursor: default;
-}
-.slot-buttons button.occupied {
-  background-color: red;     /* đã đỗ */
-  cursor: default;
-}
-.slot-buttons button.reserved {
-  background-color: orange;  /* đã đặt trước */
-  cursor: default;
+.booking-card button:hover,
+.booking-fee-lookup button:hover {
+  background: #2e7d32;
 }
 
+.lookup-result {
+  margin-top: 8px;
+  font-size: 15px;
+}
+
+/* ==== STATUS DROPDOWN & BUTTON FOR LOOKUP ==== */
+#lookupStatus {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #001f8d;
+  background: #f4f8ff;
+  color: #001f8d;
+  margin-right: 8px;
+  outline: none;
+  transition: border 0.2s;
+}
+#lookupStatus:focus {
+  border: 2px solid #4CAF50;
+}
+#updateLookupStatusBtn {
+  padding: 6px 16px;
+  border-radius: 6px;
+  border: none;
+  background: #4CAF50;
+  color: white;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+#updateLookupStatusBtn:hover {
+  background: #388e3c;
+}

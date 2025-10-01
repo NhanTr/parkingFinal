@@ -1,3 +1,24 @@
+// Cập nhật trạng thái booking
+async function updateBookingStatus(bookingCode, newStatus) {
+  try {
+    const response = await fetch(`/api/manager/${bookingCode}/status`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ status: newStatus })
+    });
+    const result = await response.json();
+    if (response.ok) {
+      alert("Cập nhật thành công!");
+      location.reload();
+    } else {
+      alert(result.message || "Lỗi cập nhật trạng thái");
+    }
+  } catch (err) {
+    alert("Lỗi kết nối server");
+  }
+}
 let ws;
 let tempReservations = {}; // {slotId: {timer: timeoutId, endTime: timestamp}}
 
@@ -292,6 +313,15 @@ async function searchBooking() {
       <p><strong>Khách hàng:</strong> ${booking.userId.fullname}</p>
       <p><strong>Biển số:</strong> ${booking.license_plate}</p>
       <p><strong>Ngày đặt:</strong> ${booking.createdAt}</p>
+      <div>
+        <label for="searchStatus"><strong>Trạng thái:</strong></label>
+        <select id="searchStatus" class="status-select">
+          <option value="pending" ${booking.status === 'pending' ? 'selected' : ''}>pending</option>
+          <option value="confirmed" ${booking.status === 'confirmed' ? 'selected' : ''}>confirmed</option>
+          <option value="cancelled" ${booking.status === 'cancelled' ? 'selected' : ''}>cancelled</option>
+        </select>
+        <button class="update-status-btn" onclick="updateBookingStatus('${booking.bookingCode}', document.getElementById('searchStatus').value)">Cập nhật</button>
+      </div>
     `;
   } catch (err) {
     document.getElementById("searchResult").innerHTML = `<p style="color:red">${err.message}</p>`;

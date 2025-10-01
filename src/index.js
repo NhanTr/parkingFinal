@@ -24,6 +24,7 @@ const wss = new WebSocket.Server({ server });
 app.use(express.json()); // parse application/json
 app.use(express.urlencoded({ extended: true })); 
 
+
 // Kết nối MongoDB (database tên "reli_park")
 mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
@@ -34,21 +35,30 @@ mongoose.connect(process.env.MONGO_URI, {
 app.use(bodyParser.urlencoded({ extended: true }));
 
 const hbs = create({
-    // Specify helpers which are only registered on this instance.
-    helpers: {
+  helpers: {
+    statusIsActive: function(status) {
+      return status === "ACTIVE";
+    },
+        eq: function(a, b) {
+            return a === b;
+        },
         foo() { return 'FOO!'; },
         bar() { return 'BAR!'; }
-    }
+  }
 });
+app.engine('hbs', hbs.engine);
 app.use(express.static(path.join(__dirname, "public")));
 app.use(morgan('combined'))
 
 app.use(session({
-  secret: process.env.SESSION_SECRET,   // nên để env
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: true,
-  cookie: { secure: false }  // nếu HTTPS thì để true
-}));
+  cookie: {
+    secure: false, // nếu dùng HTTPS thì để true
+    maxAge: 24 * 60 * 60 * 1000 // 24 giờ (đơn vị ms), bạn có thể tăng/giảm tùy ý
+  }
+}));;
 
 app.engine('hbs', engine({
   extname: '.hbs',
@@ -783,25 +793,44 @@ app.post("/parking", async (req, res) => {
 
     const bookingCode = await generateUniqueCode();
 
-    const newBooking = new Booking({
-      userId: req.session.user.id,
-      license_plate,
-      bookingCode
-    });
+        const newBooking = new Booking({
+            userId: req.session.user.id,
+            license_plate,
+            bookingCode
+        });
 
-    console.log("About to save booking:", newBooking);
-    await newBooking.save();
-    console.log("Booking saved to DB!");
+        console.log("About to save booking:", newBooking);
+        await newBooking.save();
+        console.log("Booking saved to DB!");
 
-    // Lưu vào session để dùng ở trang sau
-    req.session.bookingCode = bookingCode;
+        // Tự động hủy nếu vẫn pending sau 30 giây
+        setTimeout(async () => {
+            const booking = await Booking.findOne({ bookingCode });
+            if (booking && booking.status === "pending") {
+                booking.status = "cancelled";
+                await booking.save();
+                // Broadcast cho client biết trạng thái đã đổi
+                broadcastToWebClients({
+                    type: "booking_changed",
+                    bookingCode: booking.bookingCode,
+                    status: booking.status,
+                    userId: booking.userId,
+                    license_plate: booking.license_plate,
+                    updatedAt: new Date().toISOString()
+                });
+                console.log(`Booking ${bookingCode} tự động chuyển sang cancelled sau 30s.`);
+            }
+        }, 30000);
 
-    res.json({
-      message: "Đặt chỗ thành công",
-      bookingCode,
-      license_plate,
-      user: req.session.user.fullname
-    });
+        // Lưu vào session để dùng ở trang sau
+        req.session.bookingCode = bookingCode;
+
+        res.json({
+            message: "Đặt chỗ thành công",
+            bookingCode,
+            license_plate,
+            user: req.session.user.fullname
+        });
   } catch (err) {
     console.error("Booking error:", err);
     res.status(500).json({ message: "Lỗi server", error: err.message });
@@ -831,7 +860,20 @@ app.get("/manager", async (req, res) => {
     bookings.forEach(b => {
       b.createdAt = new Date(b.createdAt).toLocaleString("vi-VN");
     });
-    res.render("manager", { bookings });
+
+    // Lấy lịch sử RFID, sort theo updatedAt mới nhất trước
+    const rfidaccesses = await RfidAccess.find()
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    // Định dạng thời gian cho bảng RFID
+    rfidaccesses.forEach(r => {
+      r.entryTime = r.entryTime ? new Date(r.entryTime).toLocaleString("vi-VN") : "";
+      r.exitTime = r.exitTime ? new Date(r.exitTime).toLocaleString("vi-VN") : "";
+      r.updatedAt = r.updatedAt ? new Date(r.updatedAt).toLocaleString("vi-VN") : "";
+    });
+
+    res.render("manager", { bookings, rfidaccesses});
   } catch (err) {
     console.error("❌ Lỗi lấy booking:", err);
     res.status(500).send("Lỗi server khi lấy booking");
@@ -867,6 +909,29 @@ app.delete("/api/manager/:code", async (req, res) => {
     res.status(500).json({ message: "Lỗi server" });
   }
 });
+// Cập nhật trạng thái booking
+app.put("/api/manager/:code/status", async (req, res) => {
+    try {
+        const { status } = req.body;
+        if (!["pending", "confirmed", "cancelled"].includes(status)) {
+            return res.status(400).json({ message: "Trạng thái không hợp lệ" });
+        }
+        let update = { status };
+        if (status === "confirmed") {
+            update.createdAt = new Date();
+        }
+        const booking = await Booking.findOneAndUpdate(
+            { bookingCode: req.params.code },
+            update,
+            { new: true }
+        );
+        if (!booking) return res.status(404).json({ message: "Không tìm thấy booking" });
+        res.json({ message: "Cập nhật thành công", booking });
+    } catch (err) {
+        console.error("❌ Lỗi cập nhật trạng thái booking:", err);
+        res.status(500).json({ message: "Lỗi server" });
+    }
+});
 
 // API endpoints cho parking status
 app.get('/api/parking-status', (req, res) => {
@@ -876,6 +941,24 @@ app.get('/api/parking-status', (req, res) => {
         webClients: webClients.size,
         timestamp: new Date().toISOString()
     });
+});
+
+// Thêm vào routes của bạn
+app.post('/api/bookings/note', async (req, res) => {
+  const { bookingCode, note } = req.body;
+  if (!bookingCode || !note) return res.status(400).json({ message: 'Thiếu thông tin' });
+  try {
+    console.log(`Updating note for booking ${bookingCode}: ${note}`);
+    const booking = await Booking.findOneAndUpdate(
+      { bookingCode },
+      { note },
+      { new: true }
+    );
+    if (!booking) return res.status(404).json({ message: 'Không tìm thấy mã vé' });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ message: 'Lỗi server' });
+  }
 });
 
 // API endpoint cho việc điều khiển gate (HTTP fallback)

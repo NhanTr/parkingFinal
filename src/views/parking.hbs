@@ -36,17 +36,21 @@
         <div class="legend">
           <span class="occupied"></span> Đã đỗ
         </div>
-        <div class="legend">
-          <span class="reserved"></span> Đặt trước
-        </div>
       </div>
     </div>
     
     <div class="booking-card">
+      <div class="booking-form">
         <input id="license_plate" name="license_plate" type="text" required placeholder="Biển số xe">
         <button type="submit" id="bookBtn" class="button"> Đặt chỗ </button>
+      </div>
+      <div class="lookup-form">
+        <input type="text" id="lookupCode" placeholder="Nhập mã vé">
+        <button id="lookupBtn">Tra cứu</button>
+      </div>
+      <div id="lookupResult" class="lookup-result"></div>
     </div>
-  </div>
+    </div>
 </div>
 
 <script src="js/parking.js"></script>

@@ -1,3 +1,4 @@
+
 /* ==== RESET & BASE STYLES ==== */
 * {
     margin: 0;
@@ -420,4 +421,96 @@ body {
   background: #eef;
   margin: 10px;
   border-radius: 6px;
+}
+
+/* ...existing code... */
+
+.rfid-access-history {
+  margin: 32px auto 0 auto;
+  padding: 20px 24px;
+  background: #f8fafc;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(30, 144, 255, 0.08);
+  max-width: 900px;
+}
+
+.rfid-access-history h3 {
+  margin-bottom: 16px;
+  color: #12842b;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.rfid-access-history table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  font-size: 15px;
+}
+
+.rfid-access-history th, 
+.rfid-access-history td {
+  padding: 10px 8px;
+  text-align: center;
+}
+
+.rfid-access-history th {
+  background: #e3f0fc;
+  color: #1a783f;
+  font-weight: 600;
+}
+
+.rfid-access-history tr:nth-child(even) {
+  background: #f4f8fb;
+}
+
+.rfid-access-history tr:hover {
+  background: #e0f3ff;
+}
+
+.rfid-access-history td {
+  color: #333;
+}
+
+.rfid-access-history td:last-child {
+  font-weight: 500;
+}
+
+.rfid-access-history .status-in {
+  color: #43a047;
+  font-weight: bold;
+}
+
+.rfid-access-history .status-out {
+  color: #e53935;
+  font-weight: bold;
+}
+
+/* ==== STATUS DROPDOWN & BUTTON ==== */
+.status-select {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #001f8d;
+  background: #f4f8ff;
+  color: #001f8d;
+  margin-right: 8px;
+  outline: none;
+  transition: border 0.2s;
+}
+.status-select:focus {
+  border: 2px solid #4CAF50;
+}
+.update-status-btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: none;
+  background: #4CAF50;
+  color: white;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.update-status-btn:hover {
+  background: #388e3c;
 }
