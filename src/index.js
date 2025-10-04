@@ -84,6 +84,8 @@ let currentStatus = {
     slots: [0, 0, 0, 0]  // 0: available, 1: occupied, 2: reserved
 };
 
+
+
 // Hàm helper để broadcast tin nhắn tới tất cả web clients
 function broadcastToWebClients(message) {
     const messageStr = JSON.stringify(message);
@@ -870,6 +872,7 @@ app.get("/manager", async (req, res) => {
     rfidaccesses.forEach(r => {
       r.entryTime = r.entryTime ? new Date(r.entryTime).toLocaleString("vi-VN") : "";
       r.exitTime = r.exitTime ? new Date(r.exitTime).toLocaleString("vi-VN") : "";
+      r.createdAt = r.createdAt ? new Date(r.createdAt).toLocaleString("vi-VN") : "";
       r.updatedAt = r.updatedAt ? new Date(r.updatedAt).toLocaleString("vi-VN") : "";
     });
 
