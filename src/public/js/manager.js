@@ -1,5 +1,83 @@
+// Cập nhật trạng thái booking
+async function updateBookingStatus(bookingCode, newStatus) {
+  try {
+    const response = await fetch(`/api/manager/${bookingCode}/status`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ status: newStatus })
+    });
+    const result = await response.json();
+    if (response.ok) {
+      alert("Cập nhật thành công!");
+      location.reload();
+    } else {
+      alert(result.message || "Lỗi cập nhật trạng thái");
+    }
+  } catch (err) {
+    alert("Lỗi kết nối server");
+  }
+}
 let ws;
 let tempReservations = {}; // {slotId: {timer: timeoutId, endTime: timestamp}}
+
+// ======================= Định dạng ngày giờ =======================
+
+function formatVietnamTime(dateString) {
+  if (!dateString || dateString === '-') return '-';
+  
+  const date = new Date(dateString);
+  
+  // Kiểm tra date hợp lệ
+  if (isNaN(date.getTime())) return '-';
+  
+  // Format thủ công để đảm bảo chính xác
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  
+  return `${hours}:${minutes}:${seconds} ${day}/${month}/${year}`;
+}
+
+function formatAllDates() {
+  // Format bảng bookings
+  const bookingTable = document.querySelector('.parking-history table tbody');
+  if (bookingTable) {
+    const rows = bookingTable.querySelectorAll('tr');
+    rows.forEach(row => {
+      const dateCell = row.cells[3]; // Cột "Ngày đặt" (index 3)
+      if (dateCell) {
+        const originalDate = dateCell.textContent.trim();
+        dateCell.textContent = formatVietnamTime(originalDate);
+      }
+    });
+  }
+  
+  // Format bảng RFID Access
+  const rfidTable = document.querySelector('.rfid-access-history table tbody');
+  if (rfidTable) {
+    const rows = rfidTable.querySelectorAll('tr');
+    rows.forEach(row => {
+      // Cột "Thời gian vào" (index 2)
+      const entryCell = row.cells[2];
+      if (entryCell) {
+        const originalDate = entryCell.textContent.trim();
+        entryCell.textContent = formatVietnamTime(originalDate);
+      }
+      
+      // Cột "Thời gian cập nhật" (index 3)
+      const updateCell = row.cells[3];
+      if (updateCell) {
+        const originalDate = updateCell.textContent.trim();
+        updateCell.textContent = formatVietnamTime(originalDate);
+      }
+    });
+  }
+}
 
 function initWebSocket(){
   ws = new WebSocket("ws://localhost:4000");
@@ -51,28 +129,6 @@ function initWebSocket(){
       setGateStatus("gate2", status.exitGateOpen);
     }
 
-    // ====== Phản hồi đặt chỗ ======
-    if (msg.type === "reserve_slot_response") {
-      if (msg.success) {
-        console.log("✅ Reserve slot success:", msg.message);
-        showNotification(`Đã đặt chỗ ${msg.slotId} thành công! (30 giây)`, 'success');
-      } else {
-        console.warn("⚠️ Reserve slot failed:", msg.message);
-        showNotification(`Không thể đặt chỗ ${msg.slotId}: ${msg.message}`, 'error');
-      }
-    }
-
-    // ====== Phản hồi hủy đặt chỗ ======
-    if (msg.type === "cancel_reservation_response") {
-      if (msg.success) {
-        console.log("✅ Cancel reservation success:", msg.message);
-        showNotification(`Đã hủy đặt chỗ ${msg.slotId}`, 'success');
-      } else {
-        console.warn("⚠️ Cancel reservation failed:", msg.message);
-        showNotification(`Không thể hủy đặt chỗ ${msg.slotId}: ${msg.message}`, 'error');
-      }
-    }
-
     // ====== Phản hồi điều khiển cổng ======
     if (msg.type === "gate_control_response") {
       if (msg.success) {
@@ -106,43 +162,6 @@ function initWebSocket(){
 initWebSocket();
 
 // ======================= Chức năng đặt chỗ =======================
-function reserveSlot(slotId) {
-  if (!ws || ws.readyState !== WebSocket.OPEN) {
-    showNotification("⚠️ Mất kết nối WebSocket!", 'error');
-    return;
-  }
-
-  // Kiểm tra trạng thái slot trước khi đặt
-  const slotIndex = getSlotIndex(slotId);
-  const slotBtn = document.querySelectorAll(".slot-btn")[slotIndex];
-  
-  if (!slotBtn || slotBtn.classList.contains('occupied') || slotBtn.classList.contains('reserved')) {
-    showNotification(`Chỗ ${slotId} không khả dụng để đặt`, 'warning');
-    return;
-  }
-
-  ws.send(JSON.stringify({
-    type: "reserve_slot",
-    slotId: slotId
-  }));
-
-  console.log("🎯 Sent reserve slot request:", slotId);
-  showNotification(`Đang đặt chỗ ${slotId}...`, 'info');
-}
-
-function cancelReservation(slotId) {
-  if (!ws || ws.readyState !== WebSocket.OPEN) {
-    showNotification("⚠️ Mất kết nối WebSocket!", 'error');
-    return;
-  }
-
-  ws.send(JSON.stringify({
-    type: "cancel_reservation",
-    slotId: slotId
-  }));
-
-  console.log("❌ Sent cancel reservation request:", slotId);
-}
 
 // Helper function để lấy slot index
 function getSlotIndex(slotId) {
@@ -233,30 +252,27 @@ document.addEventListener("DOMContentLoaded", () => {
   if (gate2) gate2.addEventListener("click", () => toggleGate("gate2"));
 
   // Gắn sự kiện click cho các slot buttons
-  const slotBtns = document.querySelectorAll(".slot-btn");
-  slotBtns.forEach((btn, index) => {
+const slotBtns = document.querySelectorAll(".slot-btn");
+slotBtns.forEach((btn, index) => {
     const slotId = ['A1', 'A2', 'A3', 'A4'][index];
     
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       
+      // Chỉ hiển thị thông tin, không cho đặt
       if (btn.classList.contains('available')) {
-        // Slot trống - đặt chỗ
-        reserveSlot(slotId);
+        showNotification(`Chỗ ${slotId} đang trống`, 'info');
       } else if (btn.classList.contains('reserved')) {
-        // Slot đã đặt - hỏi có muốn hủy không
-        if (confirm(`Bạn có muốn hủy đặt chỗ ${slotId}?`)) {
-          cancelReservation(slotId);
-        }
+        showNotification(`Chỗ ${slotId} đã được đặt bởi khách hàng`, 'warning');
       } else if (btn.classList.contains('occupied')) {
-        // Slot đã có xe - không làm gì
-        showNotification(`Chỗ ${slotId} đã có xe, không thể thao tác`, 'warning');
+        showNotification(`Chỗ ${slotId} đã có xe`, 'warning');
       }
     });
 
-    // Thêm cursor pointer cho available slots
+    // Thêm cursor pointer
     btn.style.cursor = 'pointer';
   });
+  formatAllDates();
 });
 
 // Hiện frame
@@ -292,6 +308,15 @@ async function searchBooking() {
       <p><strong>Khách hàng:</strong> ${booking.userId.fullname}</p>
       <p><strong>Biển số:</strong> ${booking.license_plate}</p>
       <p><strong>Ngày đặt:</strong> ${booking.createdAt}</p>
+      <div>
+        <label for="searchStatus"><strong>Trạng thái:</strong></label>
+        <select id="searchStatus" class="status-select">
+          <option value="pending" ${booking.status === 'pending' ? 'selected' : ''}>pending</option>
+          <option value="confirmed" ${booking.status === 'confirmed' ? 'selected' : ''}>confirmed</option>
+          <option value="cancelled" ${booking.status === 'cancelled' ? 'selected' : ''}>cancelled</option>
+        </select>
+        <button class="update-status-btn" onclick="updateBookingStatus('${booking.bookingCode}', document.getElementById('searchStatus').value)">Cập nhật</button>
+      </div>
     `;
   } catch (err) {
     document.getElementById("searchResult").innerHTML = `<p style="color:red">${err.message}</p>`;
