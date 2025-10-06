@@ -29,18 +29,26 @@ function formatVietnamTime(dateString) {
   
   const date = new Date(dateString);
   
-  // Kiểm tra date hợp lệ
   if (isNaN(date.getTime())) return '-';
   
-  // Format thủ công để đảm bảo chính xác
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const year = date.getFullYear();
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const seconds = String(date.getSeconds()).padStart(2, '0');
+  // Convert sang giờ VN bằng toLocaleString
+  const options = {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  };
   
-  return `${hours}:${minutes}:${seconds} ${day}/${month}/${year}`;
+  const formatter = new Intl.DateTimeFormat('en-GB', options);
+  const parts = formatter.formatToParts(date);
+  
+  const getValue = (type) => parts.find(p => p.type === type)?.value || '';
+  
+  return `${getValue('hour')}:${getValue('minute')}:${getValue('second')} ${getValue('day')}/${getValue('month')}/${getValue('year')}`;
 }
 
 function formatAllDates() {

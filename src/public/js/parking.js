@@ -265,3 +265,108 @@ let lastTouchEnd = 0;
 
 // Log để debug
 console.log("📱 Parking.js đã được tải - User interface ready");
+
+function parseVNDateTime(str) {
+  // str: "20:00:55 25/9/2025"
+  if (!str) return null;
+  const [time, date] = str.split(' ');
+  if (!time || !date) return null;
+  const [hour, minute, second] = time.split(':').map(Number);
+  const [day, month, year] = date.split('/').map(Number);
+  return new Date(year, month - 1, day, hour, minute, second);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  const lookupBtn = document.getElementById('lookupBtn');
+  const lookupCode = document.getElementById('lookupCode');
+  const lookupResult = document.getElementById('lookupResult');
+
+  lookupBtn.addEventListener('click', async function() {
+    const code = lookupCode.value.trim();
+    if (!code) {
+      lookupResult.innerHTML = '<span style="color:red">Vui lòng nhập mã vé!</span>';
+      return;
+    }
+    lookupResult.innerHTML = 'Đang tra cứu...';
+    try {
+      const res = await fetch(`/api/manager/${code}`);
+      if (!res.ok) throw new Error('Không tìm thấy mã vé');
+      const data = await res.json();
+      let fee = 0;
+      if (data.createdAt) {
+        // Tính số phút
+        const start = parseVNDateTime(data.createdAt) ;
+        const end = new Date(); 
+        const minutes = Math.ceil((end - start) / (1000 * 60));
+        const hours = Math.ceil(minutes / 60);
+        // Giả sử áp dụng giá ban ngày
+        fee = hours * 10000;
+      }
+      lookupResult.innerHTML = `
+        <div>
+          <strong>Thời gian đặt:</strong> ${data.createdAt || '-'}<br>
+          <strong>Phí tạm tính:</strong> <span style="color:#e53935;font-weight:bold">${fee.toLocaleString()} VNĐ</span><br>
+          <strong>Note:</strong> ${data.note || '-'}<br>
+          <label for="lookupStatus">Trạng thái:</label>
+          <select id="lookupStatus">
+            <option value="pending" ${data.status === 'pending' ? 'selected' : ''}>pending</option>
+            <option value="confirmed" ${data.status === 'confirmed' ? 'selected' : ''}>confirmed</option>
+            <option value="cancelled" ${data.status === 'cancelled' ? 'selected' : ''}>cancelled</option>
+          </select>
+          <button id="updateLookupStatusBtn">Cập nhật</button>
+        </div>
+      `;
+      // Gắn sự kiện cập nhật trạng thái ngay sau khi render
+      const updateBtn = document.getElementById('updateLookupStatusBtn');
+      if (updateBtn) {
+        updateBtn.onclick = async function() {
+          const newStatus = document.getElementById('lookupStatus').value;
+          try {
+            const res = await fetch(`/api/manager/${code}/status`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ status: newStatus })
+            });
+            const result = await res.json();
+            if (res.ok) {
+              alert("Cập nhật trạng thái thành công!");
+              lookupBtn.click(); // reload lại thông tin
+            } else {
+              alert(result.message || "Lỗi cập nhật trạng thái");
+            }
+          } catch (err) {
+            alert("Lỗi kết nối server");
+          }
+        }
+      }
+    } catch (err) {
+      lookupResult.innerHTML = '<span style="color:red">Không tìm thấy mã vé hoặc lỗi server!</span>';
+    }
+  });
+      setTimeout(() => {
+        const updateBtn = document.getElementById('updateLookupStatusBtn');
+        if (updateBtn) {
+          console.log('Found update button');
+          updateBtn.onclick = async function() {
+            const newStatus = document.getElementById('lookupStatus').value;
+            try {
+              const res = await fetch(`/api/manager/${code}/status`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: newStatus })
+              });
+              const result = await res.json();
+              if (res.ok) {
+                alert("Cập nhật trạng thái thành công!");
+                lookupBtn.click(); // reload lại thông tin
+              } else {
+                alert(result.message || "Lỗi cập nhật trạng thái");
+              }
+            } catch (err) {
+              alert("Lỗi kết nối server");
+            }
+          }
+        }
+      }, 100);
+
+});
