@@ -48,22 +48,24 @@ rfidAccessSchema.methods.calculateParkingFee = function() {
   const minutes = Math.ceil(durationMs / (1000 * 60));
   const hours = Math.ceil(minutes / 60);
   
-  // Logic tính phí giống như trong ESP32
   const entryHour = this.entryTime.getHours();
   const exitHour = this.exitTime.getHours();
+
+  console.log('VN Time - Entry:', entryHour, 'Exit:', exitHour);
   
-  // Miễn phí từ 23h - 5h
-  if ((entryHour >= 23 || entryHour <= 5) && (exitHour >= 23 || exitHour <= 5)) {
-    return 0;
-  }
+  // Nếu đỗ qua đêm (entry ban đêm, exit ban ngày)
+  // Có thể tính theo exit hour hoặc giữ mức cố định
+  let hourlyRate = 10000;
   
-  let hourlyRate = 0;
+  // Ưu tiên tính theo giờ VÀO (entry)
   if (entryHour >= 6 && entryHour <= 17) {
-    hourlyRate = 10000; // 10,000 VND/giờ ban ngày
+    hourlyRate = 10000;
   } else if (entryHour >= 18 && entryHour <= 22) {
-    hourlyRate = 15000; // 15,000 VND/giờ ban tối
+    hourlyRate = 15000;
   } else {
-    return 10.000; 
+    // Entry từ 23h-5h nhưng exit không phải khung miễn phí
+    // → Tính theo mức thấp nhất
+    hourlyRate = 10000;
   }
   
   return hours * hourlyRate;

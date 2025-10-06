@@ -24,6 +24,7 @@ const wss = new WebSocket.Server({ server });
 app.use(express.json()); // parse application/json
 app.use(express.urlencoded({ extended: true })); 
 
+
 // Kết nối MongoDB (database tên "reli_park")
 mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
@@ -34,21 +35,30 @@ mongoose.connect(process.env.MONGO_URI, {
 app.use(bodyParser.urlencoded({ extended: true }));
 
 const hbs = create({
-    // Specify helpers which are only registered on this instance.
-    helpers: {
+  helpers: {
+    statusIsActive: function(status) {
+      return status === "ACTIVE";
+    },
+        eq: function(a, b) {
+            return a === b;
+        },
         foo() { return 'FOO!'; },
         bar() { return 'BAR!'; }
-    }
+  }
 });
+app.engine('hbs', hbs.engine);
 app.use(express.static(path.join(__dirname, "public")));
 app.use(morgan('combined'))
 
 app.use(session({
-  secret: process.env.SESSION_SECRET,   // nên để env
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: true,
-  cookie: { secure: false }  // nếu HTTPS thì để true
-}));
+  cookie: {
+    secure: false, // nếu dùng HTTPS thì để true
+    maxAge: 24 * 60 * 60 * 1000 // 24 giờ (đơn vị ms), bạn có thể tăng/giảm tùy ý
+  }
+}));;
 
 app.engine('hbs', engine({
   extname: '.hbs',
@@ -67,6 +77,7 @@ let webClients = new Set(); // Lưu trữ tất cả web client connections
 let currentStatus = {
     availableSlots: 4,
     totalSlots: 4,
+    activeVehicles: 0,
     entryGateOpen: false,
     exitGateOpen: false,
     lastUpdate: new Date().toLocaleTimeString('vi-VN'),
@@ -99,6 +110,40 @@ function broadcastToWebClients(message) {
     console.log(`📡 Broadcast result: ${successCount} success, ${failCount} failed`);
 }
 
+// Hàm tính availableSlots từ RFID + Customer Bookings
+async function updateAvailableSlotsFromRFID() {
+    try {
+        console.log('=== UPDATE AVAILABLE SLOTS START ===');
+        
+        // 1. Đếm RFID active
+        const activeRFIDs = await RfidAccess.countDocuments({ status: 'ACTIVE' });
+        console.log('1. Active RFIDs:', activeRFIDs);
+   
+        // 2. CHỈ đếm bookings pending (đang chờ xác nhận)
+        const pendingBookings = await Booking.countDocuments({
+            status: 'pending'
+        });
+        console.log('2. Pending Bookings:', pendingBookings);
+        
+        // Tính available = total - rfid - pending bookings
+        currentStatus.availableSlots = currentStatus.totalSlots - activeRFIDs - pendingBookings;
+        
+        console.log('3. Result:', {
+            totalSlots: currentStatus.totalSlots,
+            activeRFIDs: activeRFIDs,
+            pendingBookings: pendingBookings,
+            availableSlots: currentStatus.availableSlots
+        });
+        console.log('=== UPDATE AVAILABLE SLOTS END ===');
+        
+        return currentStatus.availableSlots;
+    } catch (error) {
+        console.error('❌ Error:', error);
+        return null;
+    }
+}
+
+
 function sendStatusUpdateToESP32() {
     if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
         const statusUpdate = {
@@ -107,6 +152,7 @@ function sendStatusUpdateToESP32() {
                 availableSlots: currentStatus.availableSlots,
                 totalSlots: currentStatus.totalSlots,
                 slots: currentStatus.slots,
+                activeVehicles: currentStatus.activeVehicles,
                 entryGateOpen: currentStatus.entryGateOpen,
                 exitGateOpen: currentStatus.exitGateOpen,
                 isAdminMode: currentStatus.isAdminMode,
@@ -141,6 +187,8 @@ wss.on('connection', (ws) => {
             if (data.type === 'esp32_connect') {
                 esp32Connection = ws;
                 console.log('ESP32 connected successfully');
+
+                await updateAvailableSlotsFromRFID();
 
                 ws.send(JSON.stringify({
                     type: 'connection_confirmed',
@@ -216,7 +264,10 @@ wss.on('connection', (ws) => {
 
                         await newAccess.save();
                         console.log(`✅ RFID entry recorded: ${rfidCode} at ${newAccess.entryTime}`);
-
+                        
+                        // Cập nhật lại availableSlots
+                        await updateAvailableSlotsFromRFID();
+                        
                         // Gửi xác nhận về ESP32
                         if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
                             esp32Connection.send(JSON.stringify({
@@ -268,6 +319,8 @@ wss.on('connection', (ws) => {
 
                         await activeAccess.save();
                         console.log(`✅ RFID exit recorded: ${rfidCode}, Duration: ${activeAccess.duration}min, Fee: ${activeAccess.parkingFee}VND`);
+
+                        await updateAvailableSlotsFromRFID();
 
                         // Gửi thông tin phí về ESP32
                         if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
@@ -334,8 +387,20 @@ wss.on('connection', (ws) => {
                     });
                 }
 
-                // Cập nhật availableSlots dựa trên slots
-                currentStatus.availableSlots = currentStatus.slots.filter(s => s === 0).length;
+                    try {
+                        const activeRFIDs = await RfidAccess.countDocuments({ status: 'ACTIVE' });
+                        currentStatus.availableSlots = currentStatus.totalSlots - activeRFIDs;
+                        
+                        console.log('🔍 RFID Calculation:', {
+                            totalSlots: currentStatus.totalSlots,
+                            activeRFIDs: activeRFIDs,
+                            availableSlots: currentStatus.availableSlots
+                        });
+                    } catch (error) {
+                        console.error('❌ Error counting RFID:', error);
+                        // Fallback: tính từ slots nếu lỗi database
+                        currentStatus.availableSlots = currentStatus.slots.filter(s => s === 0).length;
+                    }
 
                 // Cập nhật các trường khác
                 if (statusData.totalSlots !== undefined) currentStatus.totalSlots = statusData.totalSlots;
@@ -343,6 +408,9 @@ wss.on('connection', (ws) => {
                 if (statusData.exitGateOpen !== undefined) currentStatus.exitGateOpen = statusData.exitGateOpen;
                 if (statusData.lastUpdate !== undefined) currentStatus.lastUpdate = statusData.lastUpdate;
                 if (statusData.isAdminMode !== undefined) currentStatus.isAdminMode = statusData.isAdminMode;
+                
+                // Tính availableSlots từ RFID + Reserved
+                await updateAvailableSlotsFromRFID();
 
                 console.log('🔍 Updated current status:', {
                     availableSlots: currentStatus.availableSlots,
@@ -379,7 +447,9 @@ wss.on('connection', (ws) => {
                 }
 
                 // Cập nhật availableSlots
-                currentStatus.availableSlots = currentStatus.slots.filter(s => s === 0).length;
+                // Cập nhật availableSlots dựa trên slots
+if (statusData.availableSlots !== undefined) currentStatus.availableSlots = statusData.availableSlots;
+if (statusData.activeVehicles !== undefined) currentStatus.activeVehicles = statusData.activeVehicles;
 
                 Object.assign(currentStatus, sensorData);
 
@@ -414,151 +484,6 @@ wss.on('connection', (ws) => {
                     timestamp: new Date().toISOString()
                 });
                 console.log('✅ History data broadcasted to', webClients.size, 'web clients');
-            }
-
-            //========== Xử lý yêu cầu đặt chỗ từ manager.js ==========//
-            if (data.type === 'reserve_slot') {
-                const slotId = data.slotId;  // e.g., 'A1'
-                const index = getSlotIndex(slotId);
-                if (index !== -1 && currentStatus.slots[index] === 0) {
-                    currentStatus.slots[index] = 2;  // Set reserved
-                    currentStatus.availableSlots = currentStatus.slots.filter(s => s === 0).length;
-
-                    console.log(`✅ Reserved slot ${slotId} (index ${index})`);
-
-                    // Send immediate status update to ESP32
-                    const statusSent = sendStatusUpdateToESP32();
-
-                    // Gửi thông báo reservation đến ESP32
-                    if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
-                        esp32Connection.send(JSON.stringify({
-                            type: 'slot_reservation',
-                            data: {
-                                slotId: slotId,
-                                index: index,
-                                action: 'reserve',
-                                availableSlots: currentStatus.availableSlots,
-                                totalSlots: currentStatus.totalSlots,
-                                duration: 30 // thời gian hiển thị reservation (30 giây)
-                            },
-                            timestamp: new Date().toISOString()
-                        }));
-                        console.log(`📱 Sent reservation notification to ESP32: ${slotId}`);
-                    }
-
-                    // Broadcast trạng thái mới
-                    broadcastToWebClients({
-                        type: 'status',
-                        data: currentStatus,
-                        timestamp: new Date().toISOString()
-                    });
-
-                    // Response thành công về cho web client
-                    ws.send(JSON.stringify({
-                        type: 'reserve_slot_response',
-                        success: true,
-                        message: `Slot ${slotId} reserved successfully`,
-                        slotId: slotId,
-                        availableSlots: currentStatus.availableSlots,
-                        timestamp: new Date().toISOString()
-                    }));
-
-                    // Timer hết hạn 30 giây
-                    setTimeout(() => {
-                        if (currentStatus.slots[index] === 2) {
-                            currentStatus.slots[index] = 0;
-                            currentStatus.availableSlots = currentStatus.slots.filter(s => s === 0).length;
-                            console.log(`⏰ Reservation expired for slot ${slotId}`);
-                            
-                            // Send status update when reservation expires
-                            sendStatusUpdateToESP32();
-                            
-                            // Thông báo hết hạn đến ESP32
-                            if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
-                                esp32Connection.send(JSON.stringify({
-                                    type: 'slot_reservation',
-                                    data: {
-                                        slotId: slotId,
-                                        index: index,
-                                        action: 'expire',
-                                        availableSlots: currentStatus.availableSlots,
-                                        totalSlots: currentStatus.totalSlots
-                                    },
-                                    timestamp: new Date().toISOString()
-                                }));
-                                console.log(`📱 Sent reservation expiry to ESP32: ${slotId}`);
-                            }
-                            
-                            broadcastToWebClients({
-                                type: 'status',
-                                data: currentStatus,
-                                timestamp: new Date().toISOString()
-                            });
-                        }
-                    }, 30000);
-                } else {
-                    console.log(`⚠️ Cannot reserve slot ${slotId}: not available`);
-                    ws.send(JSON.stringify({
-                        type: 'reserve_slot_response',
-                        success: false,
-                        message: `Slot ${slotId} not available`,
-                        slotId: slotId,
-                        timestamp: new Date().toISOString()
-                    }));
-                }
-            }
-
-            // Xử lý hủy reservation
-            if (data.type === 'cancel_reservation') {
-                const slotId = data.slotId;
-                const index = getSlotIndex(slotId);
-                if (index !== -1 && currentStatus.slots[index] === 2) {
-                    currentStatus.slots[index] = 0;
-                    currentStatus.availableSlots = currentStatus.slots.filter(s => s === 0).length;
-
-                    console.log(`❌ Cancelled reservation for slot ${slotId}`);
-
-                    // Send immediate status update to ESP32
-                    sendStatusUpdateToESP32();
-
-                    // Gửi thông báo hủy đến ESP32
-                    if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
-                        esp32Connection.send(JSON.stringify({
-                            type: 'slot_reservation',
-                            data: {
-                                slotId: slotId,
-                                index: index,
-                                action: 'cancel',
-                                availableSlots: currentStatus.availableSlots,
-                                totalSlots: currentStatus.totalSlots
-                            },
-                            timestamp: new Date().toISOString()
-                        }));
-                    }
-
-                    broadcastToWebClients({
-                        type: 'status',
-                        data: currentStatus,
-                        timestamp: new Date().toISOString()
-                    });
-
-                    ws.send(JSON.stringify({
-                        type: 'cancel_reservation_response',
-                        success: true,
-                        message: `Slot ${slotId} reservation cancelled`,
-                        slotId: slotId,
-                        availableSlots: currentStatus.availableSlots,
-                        timestamp: new Date().toISOString()
-                    }));
-                } else {
-                    ws.send(JSON.stringify({
-                        type: 'cancel_reservation_response',
-                        success: false,
-                        message: `No reservation found for slot ${slotId}`,
-                        slotId: slotId,
-                        timestamp: new Date().toISOString()
-                    }));
-                }
             }
             //=====================================//
 
@@ -761,6 +686,17 @@ app.post('/', async (req, res) => {
   }
 });
 
+async function syncSlotsWithDatabase() {
+    try {
+        await updateAvailableSlotsFromRFID();
+        console.log('✅ Synced:', {
+            availableSlots: currentStatus.availableSlots
+        });
+    } catch (error) {
+        console.error('❌ Sync error:', error);
+    }
+}
+
 // Hàm sinh mã 6 số duy nhất
 async function generateUniqueCode() {
   let code;
@@ -783,25 +719,56 @@ app.post("/parking", async (req, res) => {
 
     const bookingCode = await generateUniqueCode();
 
-    const newBooking = new Booking({
-      userId: req.session.user.id,
-      license_plate,
-      bookingCode
-    });
+        const newBooking = new Booking({
+            userId: req.session.user.id,
+            license_plate,
+            bookingCode
+        });
 
-    console.log("About to save booking:", newBooking);
-    await newBooking.save();
-    console.log("Booking saved to DB!");
+        console.log("About to save booking:", newBooking);
 
-    // Lưu vào session để dùng ở trang sau
-    req.session.bookingCode = bookingCode;
+        await newBooking.save();
+        console.log("✅ Booking saved to DB:", newBooking._id);
 
-    res.json({
-      message: "Đặt chỗ thành công",
-      bookingCode,
-      license_plate,
-      user: req.session.user.fullname
-    });
+        await updateAvailableSlotsFromRFID();
+        console.log(`📊 Updated availableSlots: ${currentStatus.availableSlots}`);
+
+        sendStatusUpdateToESP32();
+
+          broadcastToWebClients({
+        type: 'status',
+        data: currentStatus,
+        timestamp: new Date().toISOString()
+        });
+
+        // Tự động hủy nếu vẫn pending sau 30 giây
+        setTimeout(async () => {
+            const booking = await Booking.findOne({ bookingCode });
+            if (booking && booking.status === "pending") {
+                booking.status = "cancelled";
+                await booking.save();
+                // Broadcast cho client biết trạng thái đã đổi
+                broadcastToWebClients({
+                    type: "booking_changed",
+                    bookingCode: booking.bookingCode,
+                    status: booking.status,
+                    userId: booking.userId,
+                    license_plate: booking.license_plate,
+                    updatedAt: new Date().toISOString()
+                });
+                console.log(`Booking ${bookingCode} tự động chuyển sang cancelled sau 30s.`);
+            }
+        }, 30000);
+
+        // Lưu vào session để dùng ở trang sau
+        req.session.bookingCode = bookingCode;
+
+        res.json({
+            message: "Đặt chỗ thành công",
+            bookingCode,
+            license_plate,
+            user: req.session.user.fullname
+        });
   } catch (err) {
     console.error("Booking error:", err);
     res.status(500).json({ message: "Lỗi server", error: err.message });
@@ -831,7 +798,20 @@ app.get("/manager", async (req, res) => {
     bookings.forEach(b => {
       b.createdAt = new Date(b.createdAt).toLocaleString("vi-VN");
     });
-    res.render("manager", { bookings });
+
+    // Lấy lịch sử RFID, sort theo updatedAt mới nhất trước
+    const rfidaccesses = await RfidAccess.find()
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    // Định dạng thời gian cho bảng RFID
+    rfidaccesses.forEach(r => {
+      r.entryTime = r.entryTime ? new Date(r.entryTime).toLocaleString("vi-VN") : "";
+      r.exitTime = r.exitTime ? new Date(r.exitTime).toLocaleString("vi-VN") : "";
+      r.updatedAt = r.updatedAt ? new Date(r.updatedAt).toLocaleString("vi-VN") : "";
+    });
+
+    res.render("manager", { bookings, rfidaccesses});
   } catch (err) {
     console.error("❌ Lỗi lấy booking:", err);
     res.status(500).send("Lỗi server khi lấy booking");
@@ -861,21 +841,103 @@ app.delete("/api/manager/:code", async (req, res) => {
     const result = await Booking.findOneAndDelete({ bookingCode: req.params.code });
     if (!result) return res.status(404).json({ message: "Không tìm thấy mã này để xóa" });
 
-    res.json({ message: "Xóa thành công", deleted: result });
+    // Cập nhật availableSlots
+    await updateAvailableSlotsFromRFID();
+    console.log(`📊 Updated availableSlots: ${currentStatus.availableSlots}`);
+    
+    sendStatusUpdateToESP32();
+
+    // Broadcast
+    broadcastToWebClients({
+        type: 'status',
+        data: currentStatus,
+        timestamp: new Date().toISOString()
+    });
+
+    res.json({ 
+        message: "Xóa thành công", 
+        deleted: result,
+        availableSlots: currentStatus.availableSlots
+    });
   } catch (err) {
     console.error("❌ Lỗi xóa booking:", err);
-    res.status(500).json({ message: "Lỗi server" });
+    res.status(500).json({ message: "Lỗi server khi xóa booking" });
   }
+});
+
+// Cập nhật trạng thái booking
+app.put("/api/manager/:code/status", async (req, res) => {
+    try {
+        const { status } = req.body;
+        if (!["pending", "confirmed", "cancelled"].includes(status)) {
+            return res.status(400).json({ message: "Trạng thái không hợp lệ" });
+        }
+        
+        let update = { status };
+        if (status === "confirmed") {
+            update.createdAt = new Date();
+        }
+        
+        const booking = await Booking.findOneAndUpdate(
+            { bookingCode: req.params.code },
+            update,
+            { new: true }
+        );
+        
+        if (!booking) return res.status(404).json({ message: "Không tìm thấy booking" });
+        
+        // Cập nhật availableSlots
+        await updateAvailableSlotsFromRFID();
+        console.log(`📊 Updated availableSlots: ${currentStatus.availableSlots}`);
+        
+        sendStatusUpdateToESP32();
+        
+        // Broadcast
+        broadcastToWebClients({
+            type: 'status',
+            data: currentStatus,
+            timestamp: new Date().toISOString()
+        });
+        
+        res.json({ 
+            message: "Cập nhật thành công", 
+            booking,
+            availableSlots: currentStatus.availableSlots
+        });
+    } catch (err) {
+        console.error("❌ Lỗi:", err);
+        res.status(500).json({ message: "Lỗi server" });
+    }
 });
 
 // API endpoints cho parking status
 app.get('/api/parking-status', (req, res) => {
     res.json({
         ...currentStatus,
+        availableSlots: currentStatus.availableSlots,  // ← THÊM COMMENT
+        activeVehicles: currentStatus.activeVehicles,
         esp32Connected: esp32Connection !== null && esp32Connection.readyState === WebSocket.OPEN,
         webClients: webClients.size,
         timestamp: new Date().toISOString()
     });
+});
+
+// Thêm vào routes của bạn
+app.post('/api/bookings/note', async (req, res) => {
+  const { bookingCode, note } = req.body;
+  if (!bookingCode || !note) return res.status(400).json({ message: 'Thiếu thông tin' });
+  try {
+    console.log(`Updating note for booking ${bookingCode}: ${note}`);
+    const booking = await Booking.findOneAndUpdate(
+      { bookingCode },
+      { note },
+      { new: true }
+    );
+    if (!booking) return res.status(404).json({ message: 'Không tìm thấy mã vé' });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ message: 'Lỗi server' });
+  }
 });
 
 // API endpoint cho việc điều khiển gate (HTTP fallback)
@@ -955,145 +1017,6 @@ app.get('/api/esp32-status', (req, res) => {
     });
 });
 
-// API endpoint cho việc reserve slot (HTTP fallback)
-app.post('/api/reserve-slot', (req, res) => {
-    const { slotId } = req.body;
-    console.log(`🎯 HTTP Reserve slot request: ${slotId}`);
-    
-    const index = getSlotIndex(slotId);
-    if (index !== -1 && currentStatus.slots[index] === 0) {
-        currentStatus.slots[index] = 2;  // Set reserved
-        currentStatus.availableSlots = currentStatus.slots.filter(s => s === 0).length;
-
-        console.log(`✅ Reserved slot ${slotId} (index ${index})`);
-
-        // Send status update to ESP32
-        sendStatusUpdateToESP32();
-
-        // Gửi thông báo reservation đến ESP32
-        if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
-            esp32Connection.send(JSON.stringify({
-                type: 'slot_reservation',
-                data: {
-                    slotId: slotId,
-                    index: index,
-                    action: 'reserve',
-                    availableSlots: currentStatus.availableSlots,
-                    totalSlots: currentStatus.totalSlots,
-                    duration: 30
-                },
-                timestamp: new Date().toISOString()
-            }));
-            console.log(`📱 Sent reservation notification to ESP32: ${slotId}`);
-        }
-
-        // Broadcast trạng thái mới
-        broadcastToWebClients({
-            type: 'status',
-            data: currentStatus,
-            timestamp: new Date().toISOString()
-        });
-
-        res.json({
-            success: true,
-            message: `Slot ${slotId} reserved successfully`,
-            slotId: slotId,
-            availableSlots: currentStatus.availableSlots,
-            timestamp: new Date().toISOString()
-        });
-
-        // Timer hết hạn 30 giây
-        setTimeout(() => {
-            if (currentStatus.slots[index] === 2) {
-                currentStatus.slots[index] = 0;
-                currentStatus.availableSlots = currentStatus.slots.filter(s => s === 0).length;
-                console.log(`⏰ Reservation expired for slot ${slotId}`);
-                
-                sendStatusUpdateToESP32();
-                
-                if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
-                    esp32Connection.send(JSON.stringify({
-                        type: 'slot_reservation',
-                        data: {
-                            slotId: slotId,
-                            index: index,
-                            action: 'expire',
-                            availableSlots: currentStatus.availableSlots,
-                            totalSlots: currentStatus.totalSlots
-                        },
-                        timestamp: new Date().toISOString()
-                    }));
-                    console.log(`📱 Sent reservation expiry to ESP32: ${slotId}`);
-                }
-                
-                broadcastToWebClients({
-                    type: 'status',
-                    data: currentStatus,
-                    timestamp: new Date().toISOString()
-                });
-            }
-        }, 30000);
-    } else {
-        console.log(`⚠️ Cannot reserve slot ${slotId}: not available`);
-        res.json({
-            success: false,
-            message: `Slot ${slotId} not available`,
-            slotId: slotId,
-            timestamp: new Date().toISOString()
-        });
-    }
-});
-
-// API endpoint cho việc cancel reservation
-app.post('/api/cancel-reservation', (req, res) => {
-    const { slotId } = req.body;
-    console.log(`❌ HTTP Cancel reservation request: ${slotId}`);
-    
-    const index = getSlotIndex(slotId);
-    if (index !== -1 && currentStatus.slots[index] === 2) {
-        currentStatus.slots[index] = 0;
-        currentStatus.availableSlots = currentStatus.slots.filter(s => s === 0).length;
-
-        console.log(`❌ Cancelled reservation for slot ${slotId}`);
-
-        sendStatusUpdateToESP32();
-
-        if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
-            esp32Connection.send(JSON.stringify({
-                type: 'slot_reservation',
-                data: {
-                    slotId: slotId,
-                    index: index,
-                    action: 'cancel',
-                    availableSlots: currentStatus.availableSlots,
-                    totalSlots: currentStatus.totalSlots
-                },
-                timestamp: new Date().toISOString()
-            }));
-        }
-
-        broadcastToWebClients({
-            type: 'status',
-            data: currentStatus,
-            timestamp: new Date().toISOString()
-        });
-
-        res.json({
-            success: true,
-            message: `Slot ${slotId} reservation cancelled`,
-            slotId: slotId,
-            availableSlots: currentStatus.availableSlots,
-            timestamp: new Date().toISOString()
-        });
-    } else {
-        res.json({
-            success: false,
-            message: `No reservation found for slot ${slotId}`,
-            slotId: slotId,
-            timestamp: new Date().toISOString()
-        });
-    }
-});
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -1113,15 +1036,18 @@ app.use((req, res) => {
 });
 
 // Khởi động server với WebSocket support
-server.listen(port, () => {
+server.listen(port, async () => {
     console.log(`🚀 RELIPARK Enhanced Server is running!`);
     console.log(`🌐 HTTP URL: http://localhost:${port}`);
     console.log(`🔌 WebSocket: ws://localhost:${port}`);
     
-    // Cập nhật thời gian mỗi giây
+    // Đồng bộ với database
+    await syncSlotsWithDatabase();
+    
+    // Cập nhật thời gian
     setInterval(() => {
         currentStatus.lastUpdate = new Date().toLocaleTimeString('vi-VN');
     }, 1000);
     
     console.log('✅ All systems initialized successfully!');
-})
+});
