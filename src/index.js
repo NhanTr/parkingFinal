@@ -51,7 +51,7 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use(morgan('combined'))
 
 app.use(session({
-  secret: process.env.SESSION_SECRET,
+  secret: process.env.SESSION_SECRET || 'relipark-secret-key',
   resave: false,
   saveUninitialized: true,
   cookie: {
