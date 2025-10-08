@@ -3,7 +3,7 @@ const http = require('http')
 const WebSocket = require('ws')
 const app = express()
 const path = require('path');
-const port = 4000
+const port = process.env.port || 4000
 const { create, engine } = require('express-handlebars');
 const session = require('express-session');
 const jwt = require("jsonwebtoken");
@@ -86,7 +86,13 @@ let currentStatus = {
 };
 
 // Hàm helper để broadcast tin nhắn tới tất cả web clients
-function broadcastToWebClients(message) {
+async function broadcastToWebClients(message) {
+    if (message.type === 'status') {
+        await updateAvailableSlotsFromRFID();
+        message.data = currentStatus;
+        message.timestamp = new Date().toISOString();  
+    }
+
     const messageStr = JSON.stringify(message);
     let successCount = 0;
     let failCount = 0;
@@ -144,7 +150,10 @@ async function updateAvailableSlotsFromRFID() {
 }
 
 
-function sendStatusUpdateToESP32() {
+async function sendStatusUpdateToESP32() {
+
+    await updateAvailableSlotsFromRFID();
+
     if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
         const statusUpdate = {
             type: 'status_update',
@@ -267,7 +276,14 @@ wss.on('connection', (ws) => {
                         
                         // Cập nhật lại availableSlots
                         await updateAvailableSlotsFromRFID();
-                        
+                        await sendStatusUpdateToESP32();
+
+                        await broadcastToWebClients({  
+                            type: 'status',  
+                            data: currentStatus,
+                            timestamp: new Date().toISOString()
+                        });
+
                         // Gửi xác nhận về ESP32
                         if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
                             esp32Connection.send(JSON.stringify({
@@ -321,6 +337,13 @@ wss.on('connection', (ws) => {
                         console.log(`✅ RFID exit recorded: ${rfidCode}, Duration: ${activeAccess.duration}min, Fee: ${activeAccess.parkingFee}VND`);
 
                         await updateAvailableSlotsFromRFID();
+                        await sendStatusUpdateToESP32();
+
+                        await broadcastToWebClients({  
+                            type: 'status',   
+                            data: currentStatus,
+                            timestamp: new Date().toISOString()
+                        });
 
                         // Gửi thông tin phí về ESP32
                         if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
@@ -334,7 +357,8 @@ wss.on('connection', (ws) => {
                                     exitTime: activeAccess.exitTime,
                                     duration: activeAccess.duration,
                                     fee: activeAccess.parkingFee,
-                                    accessId: activeAccess._id
+                                    accessId: activeAccess._id,
+                                    availableSlots: currentStatus.availableSlots
                                 },
                                 timestamp: new Date().toISOString()
                             }));
@@ -387,20 +411,6 @@ wss.on('connection', (ws) => {
                     });
                 }
 
-                    try {
-                        const activeRFIDs = await RfidAccess.countDocuments({ status: 'ACTIVE' });
-                        currentStatus.availableSlots = currentStatus.totalSlots - activeRFIDs;
-                        
-                        console.log('🔍 RFID Calculation:', {
-                            totalSlots: currentStatus.totalSlots,
-                            activeRFIDs: activeRFIDs,
-                            availableSlots: currentStatus.availableSlots
-                        });
-                    } catch (error) {
-                        console.error('❌ Error counting RFID:', error);
-                        // Fallback: tính từ slots nếu lỗi database
-                        currentStatus.availableSlots = currentStatus.slots.filter(s => s === 0).length;
-                    }
 
                 // Cập nhật các trường khác
                 if (statusData.totalSlots !== undefined) currentStatus.totalSlots = statusData.totalSlots;
@@ -517,6 +527,22 @@ if (statusData.activeVehicles !== undefined) currentStatus.activeVehicles = stat
                         gateId: data.gateId,
                         timestamp: new Date().toISOString()
                     }));
+                    
+                    if (actualGateId === 'entry_gate') {
+                        currentStatus.entryGateOpen = !currentStatus.entryGateOpen;
+                    } else if (actualGateId === 'exit_gate') {
+                        currentStatus.exitGateOpen = !currentStatus.exitGateOpen;
+                    }
+                    
+                    // Broadcast bất đồng bộ
+                    setImmediate(async () => {
+                        await broadcastToWebClients({
+                            type: 'status',
+                            data: currentStatus,
+                            timestamp: new Date().toISOString()
+                        });
+                    });
+
                 } else {
                     console.log('⚠️ ESP32 not connected, cannot send gate command');
                     ws.send(JSON.stringify({
@@ -731,11 +757,11 @@ app.post("/parking", async (req, res) => {
         console.log("✅ Booking saved to DB:", newBooking._id);
 
         await updateAvailableSlotsFromRFID();
+        await sendStatusUpdateToESP32();
         console.log(`📊 Updated availableSlots: ${currentStatus.availableSlots}`);
 
-        sendStatusUpdateToESP32();
 
-          broadcastToWebClients({
+        await  broadcastToWebClients({
         type: 'status',
         data: currentStatus,
         timestamp: new Date().toISOString()
@@ -748,13 +774,13 @@ app.post("/parking", async (req, res) => {
                 booking.status = "cancelled";
                 await booking.save();
                 // Broadcast cho client biết trạng thái đã đổi
-                broadcastToWebClients({
-                    type: "booking_changed",
-                    bookingCode: booking.bookingCode,
-                    status: booking.status,
-                    userId: booking.userId,
-                    license_plate: booking.license_plate,
-                    updatedAt: new Date().toISOString()
+                await updateAvailableSlotsFromRFID();
+                await sendStatusUpdateToESP32();
+                
+                await broadcastToWebClients({
+                    type: 'status',
+                    data: currentStatus,
+                    timestamp: new Date().toISOString()
                 });
                 console.log(`Booking ${bookingCode} tự động chuyển sang cancelled sau 30s.`);
             }
@@ -953,6 +979,7 @@ app.post('/api/toggle-gate', (req, res) => {
             actualGateId = 'exit_gate';
         }
 
+        // GỬI LỆNH NGAY
         esp32Connection.send(JSON.stringify({
             type: 'control',
             data: {
@@ -962,12 +989,30 @@ app.post('/api/toggle-gate', (req, res) => {
             timestamp: new Date().toISOString()
         }));
         
+        // 🔥 Cập nhật local status
+        if (actualGateId === 'entry_gate') {
+            currentStatus.entryGateOpen = !currentStatus.entryGateOpen;
+        } else if (actualGateId === 'exit_gate') {
+            currentStatus.exitGateOpen = !currentStatus.exitGateOpen;
+        }
+        
+        // TRẢ VỀ NGAY
         res.json({ 
             success: true, 
             message: `Gate ${gateId} command sent to ESP32`,
             gateId: gateId,
             timestamp: new Date().toISOString()
         });
+        
+        // Broadcast bất đồng bộ
+        setImmediate(async () => {
+            await broadcastToWebClients({
+                type: 'status',
+                data: currentStatus,
+                timestamp: new Date().toISOString()
+            });
+        });
+        
     } else {
         res.json({ 
             success: false, 

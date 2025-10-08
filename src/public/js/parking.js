@@ -297,7 +297,10 @@ document.addEventListener('DOMContentLoaded', function() {
         // Tính số phút
         const start = parseVNDateTime(data.createdAt) ;
         const end = new Date(); 
-        fee = calculateParkingFee(start, end);
+        const minutes = Math.ceil((end - start) / (1000 * 60));
+        const hours = Math.ceil(minutes / 60);
+        // Tính phí
+        fee = hours * 1000; // 1k/giờ
       }
       lookupResult.innerHTML = `
         <div>
@@ -370,36 +373,3 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 
-// Hàm tính phí parking
-function calculateParkingFee(entry, exit) {
-  const peakRatePerHour = 15000;    // 15,000đ/giờ cao điểm
-  const normalRatePerHour = 10000;  // 10,000đ/giờ bình thường
-  const peakStart = 18; // 18:00
-  const peakEnd = 22;   // 22:00
-
-  const totalMs = exit - entry;
-  const totalMinutes = Math.ceil(totalMs / (1000 * 60));
-  
-  // Nếu thời gian ngắn (< 1 ngày), tính trực tiếp
-  if (totalMinutes <= 24 * 60) {
-    return calculateShortDuration(entry, exit, peakStart, peakEnd, peakRatePerHour, normalRatePerHour);
-  }
-
-  // Tính số ngày đầy đủ và phần còn lại
-  const fullDays = Math.floor(totalMinutes / (24 * 60));
-  const remainingMinutes = totalMinutes % (24 * 60);
-
-  // Phí cố định mỗi ngày (4h cao điểm + 20h bình thường)
-  const dailyFee = (4 * peakRatePerHour) + (20 * normalRatePerHour);
-  let totalFee = fullDays * dailyFee;
-
-  // Tính phí cho phần thời gian còn lại (chưa đủ 1 ngày)
-  if (remainingMinutes > 0) {
-    const remainingEntry = new Date(exit);
-    remainingEntry.setMinutes(remainingEntry.getMinutes() - remainingMinutes);
-    
-    totalFee += calculateShortDuration(remainingEntry, exit, peakStart, peakEnd, peakRatePerHour, normalRatePerHour);
-  }
-
-  return Math.ceil(totalFee);
-}
