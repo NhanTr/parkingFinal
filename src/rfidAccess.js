@@ -40,35 +40,49 @@ const rfidAccessSchema = new mongoose.Schema({
 rfidAccessSchema.index({ rfidCode: 1, status: 1 });
 rfidAccessSchema.index({ entryTime: -1 });
 
-// Method để tính phí đỗ xe
+// Phương thức tính phí đỗ xe
 rfidAccessSchema.methods.calculateParkingFee = function() {
-  if (!this.exitTime) return 0;
-  
-  const durationMs = this.exitTime - this.entryTime;
-  const minutes = Math.ceil(durationMs / (1000 * 60));
-  const hours = Math.ceil(minutes / 60);
-  
-  const entryHour = this.entryTime.getHours();
-  const exitHour = this.exitTime.getHours();
-
-  console.log('VN Time - Entry:', entryHour, 'Exit:', exitHour);
-  
-  // Nếu đỗ qua đêm (entry ban đêm, exit ban ngày)
-  // Có thể tính theo exit hour hoặc giữ mức cố định
-  let hourlyRate = 10000;
-  
-  // Ưu tiên tính theo giờ VÀO (entry)
-  if (entryHour >= 6 && entryHour <= 17) {
-    hourlyRate = 10000;
-  } else if (entryHour >= 18 && entryHour <= 22) {
-    hourlyRate = 15000;
-  } else {
-    // Entry từ 23h-5h nhưng exit không phải khung miễn phí
-    // → Tính theo mức thấp nhất
-    hourlyRate = 10000;
+  if (!this.exitTime || !this.entryTime) {
+    this.parkingFee = 0;
+    return 0;
   }
+
+  const entry = new Date(this.entryTime);
+  const exit = new Date(this.exitTime);
   
-  return hours * hourlyRate;
+  const peakRatePerMin = 15000 / 60;    // 250đ/phút
+  const normalRatePerMin = 10000 / 60;  // 167đ/phút
+  const peakStart = 18; // 18:00
+  const peakEnd = 22;   // 22:00
+
+  let totalMinutes = Math.ceil((exit - entry) / (1000 * 60));
+  this.duration = totalMinutes;
+
+  // Nếu thời gian ngắn (< 4 tiếng), tính trực tiếp
+  if (totalMinutes <= 4 * 60) {
+    return this.calculateShortDuration(entry, exit, peakStart, peakEnd, peakRatePerMin, normalRatePerMin);
+  }
+
+  // Tính số ngày và phút còn lại
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const remainingMinutes = totalMinutes % (24 * 60);
+
+  // Phí cố định mỗi ngày (4h cao điểm + 20h bình thường)
+  const dailyFee = (4 * 60 * peakRatePerMin) + (20 * 60 * normalRatePerMin);
+  
+  let totalFee = days * dailyFee;
+
+  // Tính phí cho phần còn lại
+  if (remainingMinutes > 0) {
+    const remainingEntry = new Date(entry);
+    remainingEntry.setDate(remainingEntry.getDate() + days);
+    const remainingExit = new Date(remainingEntry.getTime() + remainingMinutes * 60000);
+    
+    totalFee += this.calculateShortDuration(remainingEntry, remainingExit, peakStart, peakEnd, peakRatePerMin, normalRatePerMin);
+  }
+
+  this.parkingFee = Math.ceil(totalFee);
+  return this.parkingFee;
 };
 
 module.exports = mongoose.model('RfidAccess', rfidAccessSchema);
