@@ -22,6 +22,7 @@ async function updateBookingStatus(bookingCode, newStatus) {
 let ws;
 let tempReservations = {}; // {slotId: {timer: timeoutId, endTime: timestamp}}
 
+
 // ======================= Định dạng ngày giờ =======================
 
 function formatVietnamTime(dateString) {
@@ -99,10 +100,12 @@ function initWebSocket(){
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
 
+
     // Cập nhật trạng thái chỗ đỗ
     if (msg.type === "status" && msg.data) {
       const status = msg.data;
       console.log("📊 Cập nhật trạng thái:", status);
+      
 
       // Cập nhật số chỗ khả dụng
       document.querySelector(".available-count").textContent =

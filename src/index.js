@@ -758,8 +758,9 @@ app.post("/parking", async (req, res) => {
                 });
                 console.log(`Booking ${bookingCode} tự động chuyển sang cancelled sau 30s.`);
             }
+            updateAvailableSlotsFromRFID();
         }, 30000);
-
+        
         // Lưu vào session để dùng ở trang sau
         req.session.bookingCode = bookingCode;
 
@@ -808,6 +809,7 @@ app.get("/manager", async (req, res) => {
     rfidaccesses.forEach(r => {
       r.entryTime = r.entryTime ? new Date(r.entryTime).toLocaleString("vi-VN") : "";
       r.exitTime = r.exitTime ? new Date(r.exitTime).toLocaleString("vi-VN") : "";
+      r.createdAt = r.createdAt ? new Date(r.createdAt).toLocaleString("vi-VN") : "";
       r.updatedAt = r.updatedAt ? new Date(r.updatedAt).toLocaleString("vi-VN") : "";
     });
 
@@ -835,15 +837,13 @@ app.get("/api/manager/:code", async (req, res) => {
   }
 });
 
+
 // Xóa booking theo mã code
 app.delete("/api/manager/:code", async (req, res) => {
   try {
     const result = await Booking.findOneAndDelete({ bookingCode: req.params.code });
     if (!result) return res.status(404).json({ message: "Không tìm thấy mã này để xóa" });
 
-    // Cập nhật availableSlots
-    await updateAvailableSlotsFromRFID();
-    console.log(`📊 Updated availableSlots: ${currentStatus.availableSlots}`);
     
     sendStatusUpdateToESP32();
 

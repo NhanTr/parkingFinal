@@ -82,9 +82,8 @@ body {
 .slot-buttons {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
-    max-width: 180px;
-    padding-left: 20px;
+    gap: 20px 80px;
+    max-width: 230px;
 }
 .slot-buttons button {
     width: 65px;
@@ -95,6 +94,11 @@ body {
     background-color: #f44336;
     color: white;
     cursor: not-allowed;
+}
+.slot-status {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
 .slot-status h3 {
@@ -230,4 +234,55 @@ body {
 }
 #updateLookupStatusBtn:hover {
   background: #388e3c;
+}
+
+.gate-info {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  font-size: 16px;
+  color: #333;
+}
+.gate-info p {
+  margin: 0;
+  color: #f4f8ff  ;
+}
+
+.slot-selection {
+  position: relative;
+  border-radius: 12px;
+  margin-top: 10px;
+  font-size: 15px;
+  background-color: rgb(68, 61, 61);
+}
+/* Đường vàng ở giữa */
+.slot-selection::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 24px;
+  width: 2px;
+  height: calc(100% - 72px);
+  background: repeating-linear-gradient(
+    to bottom,
+    #ffd600 0 20px,
+    transparent 20px 32px
+  );
+  transform: translateX(-50%);
+  border-radius: 4px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.road-divider {
+  width: 180px;
+  height: 8px;
+  margin: 18px auto;
+  background: repeating-linear-gradient(
+    to right,
+    #ffd600 0 20px,
+    transparent 20px 32px
+  );
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
 }

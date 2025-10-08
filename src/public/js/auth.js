@@ -107,7 +107,20 @@ async function handleLogin(event) {
   // Lấy dữ liệu từ form
   const email = document.getElementById("email").value;
   const password = document.getElementById("password").value;
-
+  // login manager
+  if (currentRole === "admin") {
+    if (email === "admin" && password === "admin") {
+      localStorage.setItem("token", "admin-token");
+      alert("Đăng nhập quản lý thành công!");
+      window.location.href = "/manager";
+      return;
+    } else {
+      alert("Sai tài khoản hoặc mật khẩu quản lý!");
+      return;
+    }
+  }
+  
+  // login user
   const res = await fetch("/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
