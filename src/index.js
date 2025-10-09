@@ -456,10 +456,9 @@ wss.on('connection', (ws) => {
                     });
                 }
 
-                // Cập nhật availableSlots
                 // Cập nhật availableSlots dựa trên slots
-if (statusData.availableSlots !== undefined) currentStatus.availableSlots = statusData.availableSlots;
-if (statusData.activeVehicles !== undefined) currentStatus.activeVehicles = statusData.activeVehicles;
+            if (statusData.availableSlots !== undefined) currentStatus.availableSlots = statusData.availableSlots;
+            if (statusData.activeVehicles !== undefined) currentStatus.activeVehicles = statusData.activeVehicles;
 
                 Object.assign(currentStatus, sensorData);
 
@@ -495,7 +494,6 @@ if (statusData.activeVehicles !== undefined) currentStatus.activeVehicles = stat
                 });
                 console.log('✅ History data broadcasted to', webClients.size, 'web clients');
             }
-            //=====================================//
 
             // Xử lý yêu cầu điều khiển gate
             if (data.type === 'gate_control') {
@@ -931,16 +929,15 @@ app.put("/api/manager/:code/status", async (req, res) => {
             availableSlots: currentStatus.availableSlots
         });
     } catch (err) {
-        console.error("❌ Lỗi:", err);
+        console.error("Lỗi:", err);
         res.status(500).json({ message: "Lỗi server" });
     }
 });
 
-// API endpoints cho parking status
 app.get('/api/parking-status', (req, res) => {
     res.json({
         ...currentStatus,
-        availableSlots: currentStatus.availableSlots,  // ← THÊM COMMENT
+        availableSlots: currentStatus.availableSlots,
         activeVehicles: currentStatus.activeVehicles,
         esp32Connected: esp32Connection !== null && esp32Connection.readyState === WebSocket.OPEN,
         webClients: webClients.size,
@@ -966,7 +963,7 @@ app.post('/api/bookings/note', async (req, res) => {
   }
 });
 
-// API endpoint cho việc điều khiển gate (HTTP fallback)
+// API endpoint cho việc điều khiển gate 
 app.post('/api/toggle-gate', (req, res) => {
     const { gateId } = req.body;
     console.log(`🚪 HTTP Gate control request: ${gateId}`);
@@ -989,7 +986,7 @@ app.post('/api/toggle-gate', (req, res) => {
             timestamp: new Date().toISOString()
         }));
         
-        // 🔥 Cập nhật local status
+        // Cập nhật local status
         if (actualGateId === 'entry_gate') {
             currentStatus.entryGateOpen = !currentStatus.entryGateOpen;
         } else if (actualGateId === 'exit_gate') {
