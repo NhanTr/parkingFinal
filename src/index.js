@@ -11,19 +11,21 @@ const bcrypt = require('bcryptjs');
 const RfidAccess = require('./rfidAccess');
 var morgan = require('morgan')
 require('dotenv').config();
-
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const User = require('./user');
 const Booking = require('./booking');
+const cameraService = require('./cameraService');
 
 // Tạo HTTP server và WebSocket server
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
+app.use(express.static(path.join(__dirname, "public")));
+app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
+
 app.use(express.json()); // parse application/json
 app.use(express.urlencoded({ extended: true })); 
-
 
 // Kết nối MongoDB (database tên "reli_park")
 mongoose.connect(process.env.MONGO_URI, {
@@ -34,24 +36,54 @@ mongoose.connect(process.env.MONGO_URI, {
 
 app.use(bodyParser.urlencoded({ extended: true }));
 
+// Tạo Handlebars instance với helpers
 const hbs = create({
+  extname: '.hbs',
   helpers: {
     statusIsActive: function(status) {
       return status === "ACTIVE";
     },
-        eq: function(a, b) {
-            return a === b;
-        },
-        foo() { return 'FOO!'; },
-        bar() { return 'BAR!'; }
+    eq: function(a, b, options) {
+      // Phiên bản block helper - hỗ trợ {{#eq}}...{{else}}...{{/eq}}
+      if (arguments.length === 3) {
+        // Được gọi như block helper
+        if (a === b) {
+          return options.fn(this);
+        } else {
+          return options.inverse(this);
+        }
+      }
+      // Dự phòng cho cách dùng inline
+      return a === b;
+    },
+    foo() { return 'FOO!'; },
+    bar() { return 'BAR!'; }
   }
 });
+
+// Thiết lập Handlebars engine
 app.engine('hbs', hbs.engine);
-app.use(express.static(path.join(__dirname, "public")));
+app.set('view engine', 'hbs');
+app.set('views', path.join(__dirname, 'views'));
+
+// Middleware
+app.use(morgan('combined'));
+
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'nhantr1412',
+  resave: false,
+  saveUninitialized: true,
+  cookie: {
+    secure: false,
+    maxAge: 24 * 60 * 60 * 1000
+  }
+}));
+
+app.engine('hbs', hbs.engine);
 app.use(morgan('combined'))
 
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'relipark-secret-key',
+  secret: process.env.SESSION_SECRET || 'nhantr1412',
   resave: false,
   saveUninitialized: true,
   cookie: {
@@ -60,18 +92,21 @@ app.use(session({
   }
 }));;
 
-app.engine('hbs', engine({
-  extname: '.hbs',
-}));
-app.set('view engine', 'hbs')
-app.set('views', path.join(__dirname, 'views'))
-
 console.log("PATH: ", path.join(__dirname, 'views'))
 
 // ============ WEBSOCKET & ESP32 MANAGEMENT ============
 // Biến lưu trữ kết nối
 let esp32Connection = null;
 let webClients = new Set(); // Lưu trữ tất cả web client connections
+let streamClients = new Set();
+
+let cameraConnection = null;
+let imageChunks = {};
+
+// Thư mục lưu ảnh
+const fs = require('fs');
+const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '..', 'public', 'uploads', 'license_plates');
+app.use('/uploads/license_plates', express.static(path.join(__dirname, '..', 'public', 'uploads', 'license_plates')));
 
 // Lưu trữ trạng thái hiện tại để gửi cho client mới kết nối
 let currentStatus = {
@@ -183,7 +218,6 @@ function getSlotIndex(slotId) {
     return map[slotId] !== undefined ? map[slotId] : -1;
 }
 
-// WebSocket Server - RFID Only Implementation
 wss.on('connection', (ws) => {
     console.log('New WebSocket connection established');
 
@@ -231,171 +265,188 @@ wss.on('connection', (ws) => {
                 }
             }
 
-            //============ RFID ACCESS=============//
-            // Xử lý dữ liệu RFID access từ ESP32
-            if (data.type === 'rfid_access') {
-                console.log('🏷️ Received RFID access data from ESP32:', data);
+             // ============ CAMERA CONNECTION ============
+            if (data.type === 'camera_connect') {
+                cameraConnection = ws;
+                console.log('📷 ESP32-CAM connected');
                 
-                try {
-                    const { rfidCode, action, timestamp, slotUsed } = data.data || data;
-                    
-                    if (action === 'ENTER' || action === 'Entry') {
-                        // Kiểm tra xem thẻ này có đang trong session active không
-                        const existingAccess = await RfidAccess.findOne({
-                            rfidCode: rfidCode,
-                            status: 'ACTIVE'
-                        });
+                ws.send(JSON.stringify({
+                    type: 'connection_confirmed',
+                    message: 'Camera connected successfully',
+                    timestamp: new Date().toISOString()
+                }));
+                
+                broadcastToWebClients({
+                    type: 'camera_connected',
+                    message: 'Camera is online',
+                    timestamp: new Date().toISOString()
+                });
+                
+                return;
+            }
 
-                        if (existingAccess) {
-                            console.log(`⚠️ RFID ${rfidCode} already has active session`);
-                            // Gửi cảnh báo về ESP32
-                            if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
-                                esp32Connection.send(JSON.stringify({
-                                    type: 'rfid_response',
-                                    data: {
-                                        rfidCode: rfidCode,
-                                        status: 'ERROR',
-                                        message: 'Already has active session'
-                                    },
-                                    timestamp: new Date().toISOString()
-                                }));
-                            }
-                            return;
+                if (data.type === 'stream_frame') {
+                // Broadcast frame to all stream viewers
+                const frameData = {
+                    type: 'stream_frame',
+                    data: data.data,
+                    timestamp: data.timestamp || new Date().toISOString()
+                };
+                
+                const frameStr = JSON.stringify(frameData);
+                streamClients.forEach(client => {
+                    if (client.readyState === WebSocket.OPEN) {
+                        try {
+                            client.send(frameStr);
+                        } catch (error) {
+                            console.error('Error sending frame:', error);
+                            streamClients.delete(client);
                         }
-
-                        // Tạo record mới cho lượt vào
-                        const newAccess = new RfidAccess({
-                            rfidCode: rfidCode,
-                            entryTime: timestamp ? new Date(timestamp) : new Date(),
-                            slotUsed: slotUsed && slotUsed !== 'Unknown' ? slotUsed : null,
-                            status: 'ACTIVE'
-                        });
-
-                        await newAccess.save();
-                        console.log(`✅ RFID entry recorded: ${rfidCode} at ${newAccess.entryTime}`);
-                        
-                        // Cập nhật lại availableSlots
-                        await updateAvailableSlotsFromRFID();
-                        await sendStatusUpdateToESP32();
-
-                        await broadcastToWebClients({  
-                            type: 'status',  
-                            data: currentStatus,
-                            timestamp: new Date().toISOString()
-                        });
-
-                        // Gửi xác nhận về ESP32
-                        if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
-                            esp32Connection.send(JSON.stringify({
-                                type: 'rfid_response',
-                                data: {
-                                    rfidCode: rfidCode,
-                                    status: 'ENTRY_RECORDED',
-                                    message: 'Entry recorded successfully',
-                                    entryTime: newAccess.entryTime,
-                                    accessId: newAccess._id
-                                },
-                                timestamp: new Date().toISOString()
-                            }));
-                        }
-
-                        // Broadcast thông tin entry tới web clients
-                        broadcastToWebClients({
-                            type: 'rfid_entry',
-                            data: {
-                                rfidCode: rfidCode,
-                                entryTime: newAccess.entryTime,
-                                slotUsed: slotUsed
-                            },
-                            timestamp: new Date().toISOString()
-                        });
-
-                    } else if (action === 'EXIT' || action === 'Exit') {
-                        // Tìm session active của thẻ này
-                        const activeAccess = await RfidAccess.findOne({
-                            rfidCode: rfidCode,
-                            status: 'ACTIVE'
-                        });
-
-                        if (!activeAccess) {
-                            console.log(`⚠️ No active session found for RFID ${rfidCode}`);
-                            return;
-                        }
-
-                        // Cập nhật thời gian ra và tính phí
-                        activeAccess.exitTime = timestamp ? new Date(timestamp) : new Date();
-                        activeAccess.status = 'COMPLETED';
-                        
-                        // Tính thời gian đỗ xe (phút)
-                        const durationMs = activeAccess.exitTime - activeAccess.entryTime;
-                        activeAccess.duration = Math.ceil(durationMs / (1000 * 60));
-                        
-                        // Tính phí đỗ xe
-                        activeAccess.parkingFee = activeAccess.calculateParkingFee();
-
-                        await activeAccess.save();
-                        console.log(`✅ RFID exit recorded: ${rfidCode}, Duration: ${activeAccess.duration}min, Fee: ${activeAccess.parkingFee}VND`);
-
-                        await updateAvailableSlotsFromRFID();
-                        await sendStatusUpdateToESP32();
-
-                        await broadcastToWebClients({  
-                            type: 'status',   
-                            data: currentStatus,
-                            timestamp: new Date().toISOString()
-                        });
-
-                        // Gửi thông tin phí về ESP32
-                        if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
-                            esp32Connection.send(JSON.stringify({
-                                type: 'rfid_response',
-                                data: {
-                                    rfidCode: rfidCode,
-                                    status: 'EXIT_RECORDED',
-                                    message: 'Exit recorded successfully',
-                                    entryTime: activeAccess.entryTime,
-                                    exitTime: activeAccess.exitTime,
-                                    duration: activeAccess.duration,
-                                    fee: activeAccess.parkingFee,
-                                    accessId: activeAccess._id,
-                                    availableSlots: currentStatus.availableSlots
-                                },
-                                timestamp: new Date().toISOString()
-                            }));
-                        }
-
-                        // Broadcast thông tin exit tới web clients
-                        broadcastToWebClients({
-                            type: 'rfid_exit',
-                            data: {
-                                rfidCode: rfidCode,
-                                entryTime: activeAccess.entryTime,
-                                exitTime: activeAccess.exitTime,
-                                duration: activeAccess.duration,
-                                fee: activeAccess.parkingFee,
-                                slotUsed: activeAccess.slotUsed
-                            },
-                            timestamp: new Date().toISOString()
-                        });
+                    } else {
+                        streamClients.delete(client);
                     }
+                });
+            }
 
-                } catch (error) {
-                    console.error('❌ Error processing RFID access:', error);
+            // Web client requests to start streaming
+            if (data.type === 'start_stream') {
+                streamClients.add(ws);
+                console.log('Client joined stream. Total viewers:', streamClients.size);
+                
+                // Forward to camera
+                if (cameraConnection && cameraConnection.readyState === WebSocket.OPEN) {
+                    cameraConnection.send(JSON.stringify({
+                        type: 'start_stream',
+                        timestamp: new Date().toISOString()
+                    }));
+                }
+                
+                ws.send(JSON.stringify({
+                    type: 'stream_started',
+                    message: 'Streaming started',
+                    timestamp: new Date().toISOString()
+                }));
+            }
+
+            // Web client requests to stop streaming
+            if (data.type === 'stop_stream') {
+                streamClients.delete(ws);
+                console.log('Client left stream. Total viewers:', streamClients.size);
+                
+                // If no more viewers, tell camera to stop
+                if (streamClients.size === 0 && cameraConnection && cameraConnection.readyState === WebSocket.OPEN) {
+                    cameraConnection.send(JSON.stringify({
+                        type: 'stop_stream',
+                        timestamp: new Date().toISOString()
+                    }));
+                }
+                
+                ws.send(JSON.stringify({
+                    type: 'stream_stopped',
+                    message: 'Streaming stopped',
+                    timestamp: new Date().toISOString()
+                }));
+            }
+            
+            // ============ IMAGE CHUNKS ============
+            if (data.type === 'camera_image') {
+                const { rfidCode, action, gateType, chunk, totalChunks, imageData } = data.data;
+                
+                if (!imageChunks[rfidCode]) {
+                    imageChunks[rfidCode] = {
+                        chunks: [],
+                        totalChunks: totalChunks,
+                        action: action,
+                        gateType: gateType
+                    };
+                }
+                
+                imageChunks[rfidCode].chunks[chunk] = imageData;
+                
+                console.log(`📦 Received chunk ${chunk + 1}/${totalChunks} for ${rfidCode}`);
+                
+                // Check if all chunks received
+                if (imageChunks[rfidCode].chunks.filter(c => c).length === totalChunks) {
+                    const fullImage = imageChunks[rfidCode].chunks.join('');
+                    const action = imageChunks[rfidCode].action;
+                    const gateType = imageChunks[rfidCode].gateType;
                     
-                    // Gửi lỗi về ESP32
-                    if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
-                        esp32Connection.send(JSON.stringify({
-                            type: 'rfid_response',
+                    delete imageChunks[rfidCode];
+                    
+                    // Process complete image
+                    processLicensePlateImage(rfidCode, action, gateType, fullImage);
+                }
+                
+                return;
+            }
+            
+            // ============ CAMERA ERROR ============
+            if (data.type === 'camera_error') {
+                console.error('📷 Camera error:', data.data);
+                
+                if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
+                    esp32Connection.send(JSON.stringify({
+                        type: 'rfid_response',
+                        data: {
+                            rfidCode: data.data.rfidCode,
+                            status: 'CAMERA_ERROR',
+                            message: 'Camera error - entry allowed',
+                            allowEntry: true
+                        },
+                        timestamp: new Date().toISOString()
+                    }));
+                }
+                
+                return;
+            }
+
+                // Xử lý dữ liệu RFID access từ ESP32
+                if (data.type === 'rfid_access') {
+                    console.log('\n=== RFID ACCESS RECEIVED ===');
+                    console.log('Raw data:', JSON.stringify(data, null, 2));
+                    
+                    const { rfidCode, action, timestamp, slotUsed, servoType } = data.data || data;
+                    
+                    console.log('Parsed:');
+                    console.log('  RFID Code:', rfidCode);
+                    console.log('  Action:', action);
+                    console.log('  Servo Type:', servoType);
+                    
+                    // ✅ CHECK CAMERA STATUS
+                    const cameraOnline = cameraConnection && cameraConnection.readyState === WebSocket.OPEN;
+                    console.log('Camera status:', cameraOnline ? 'ONLINE ✅' : 'OFFLINE ❌');
+                    
+                    if (cameraOnline) {
+                        console.log('📷 Requesting camera to capture image...');
+                        
+                        // GỬI REQUEST ĐẾN CAMERA
+                        cameraConnection.send(JSON.stringify({
+                            type: 'capture_request',
                             data: {
-                                rfidCode: data.data?.rfidCode || 'Unknown',
-                                status: 'ERROR',
-                                message: 'Database error: ' + error.message
+                                rfidCode: rfidCode,
+                                action: action,
+                                gateType: servoType || (action === 'ENTER' ? 'ENTRY_GATE' : 'EXIT_GATE')
                             },
                             timestamp: new Date().toISOString()
                         }));
+                        
+                        console.log('✅ Capture request sent to camera');
+                        console.log('⏳ Waiting for camera to process...');
+                        
+                        // ✅ THÊM TIMEOUT FALLBACK (10 giây)
+                        setTimeout(() => {
+                            console.log('⏱️ Camera timeout, processing without image...');
+                            processRfidWithoutCamera(rfidCode, action, timestamp, slotUsed);
+                        }, 10000);
+                        
+                    } else {
+                        console.log('⚠️ Camera offline, processing without image immediately');
+                        processRfidWithoutCamera(rfidCode, action, timestamp, slotUsed);
                     }
+                    
+                    console.log('=== END RFID ACCESS ===\n');
+                    return;
                 }
-            }
 
             // Xử lý dữ liệu status từ ESP32
             if (data.type === 'status') {
@@ -638,6 +689,17 @@ wss.on('connection', (ws) => {
                 timestamp: new Date().toISOString()
             });
         }
+
+        // Thêm xử lý cho camera
+    if (ws === cameraConnection) {
+        cameraConnection = null;
+        console.log('Camera disconnected');
+        broadcastToWebClients({
+            type: 'camera_disconnected',
+            message: 'Camera is offline',
+            timestamp: new Date().toISOString()
+        });
+    }
     });
 
     // Xử lý lỗi WebSocket
@@ -649,6 +711,455 @@ wss.on('connection', (ws) => {
         }
     });
 });
+
+// ============ PROCESS LICENSE PLATE IMAGE ============
+async function processLicensePlateImage(rfidCode, action, gateType, imageBase64) {
+    try {
+        console.log(`\n=== PROCESSING LICENSE PLATE: ${rfidCode} ===`);
+        console.log(`Action: ${action}`);
+        
+        // Save image
+        const imageUrl = cameraService.saveImage(imageBase64, rfidCode, action);
+        console.log(`💾 Image saved: ${imageUrl}`);
+        
+        // Recognize license plate
+        const ocrResult = await cameraService.recognizeLicensePlate(imageBase64);
+        
+        if (!ocrResult.success) {
+            console.log('⚠️ OCR failed, allowing entry without plate recognition');
+            
+            if (action === 'ENTER' || action === 'Entry') {
+                await handleEntryWithoutPlate(rfidCode, imageUrl);
+            } else {
+                await handleExitWithoutPlate(rfidCode, imageUrl);
+            }
+            
+            return;
+        }
+        
+        const licensePlate = ocrResult.plate;
+        console.log(`🚗 License Plate: ${licensePlate}`);
+        
+        if (action === 'ENTER' || action === 'Entry') {
+            await handleEntryWithPlate(rfidCode, licensePlate, imageUrl);
+        } else if (action === 'EXIT' || action === 'Exit') {
+            await handleExitWithPlate(rfidCode, licensePlate, imageUrl);
+        }
+        
+    } catch (error) {
+        console.error('❌ Error processing image:', error);
+        
+        if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
+            esp32Connection.send(JSON.stringify({
+                type: 'rfid_response',
+                data: {
+                    rfidCode: rfidCode,
+                    status: 'ENTRY_ALLOWED',
+                    message: 'Entry allowed (processing error)',
+                    allowEntry: true
+                },
+                timestamp: new Date().toISOString()
+            }));
+        }
+    }
+}
+
+// ============ HANDLE ENTRY WITH PLATE ============
+async function handleEntryWithPlate(rfidCode, licensePlate, imageUrl) {
+    try {
+        console.log('\n=== HANDLING ENTRY WITH PLATE ===');
+        console.log('RFID:', rfidCode);
+        console.log('License Plate:', licensePlate);
+        
+        // Check existing session
+        const existingAccess = await RfidAccess.findOne({
+            rfidCode: rfidCode,
+            status: 'ACTIVE'
+        });
+        
+        if (existingAccess) {
+            console.log('⚠️ RFID already has active session');
+            
+            // GỬI ERROR RESPONSE
+            if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
+                esp32Connection.send(JSON.stringify({
+                    type: 'rfid_response',
+                    data: {
+                        rfidCode: rfidCode,
+                        status: 'ERROR',
+                        message: 'Already has active session'
+                    },
+                    timestamp: new Date().toISOString()
+                }));
+            }
+            
+            return;
+        }
+        
+        // Create new access record
+        const newAccess = new RfidAccess({
+            rfidCode: rfidCode,
+            entryTime: new Date(),
+            licensePlateEntry: licensePlate,
+            entryImageUrl: imageUrl,
+            status: 'ACTIVE'
+        });
+        
+        await newAccess.save();
+        console.log(`✅ Entry recorded: ${rfidCode} - ${licensePlate}`);
+        
+        // Update available slots
+        await updateAvailableSlotsFromRFID();
+        await sendStatusUpdateToESP32();
+        
+        // GỬI SUCCESS RESPONSE VỀ ESP32
+        if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
+            esp32Connection.send(JSON.stringify({
+                type: 'rfid_response',
+                data: {
+                    rfidCode: rfidCode,
+                    licensePlate: licensePlate,
+                    status: 'ENTRY_RECORDED',
+                    message: 'Entry recorded - Gate opening',
+                    allowEntry: true,
+                    entryTime: newAccess.entryTime,
+                    accessId: newAccess._id
+                },
+                timestamp: new Date().toISOString()
+            }));
+            
+            console.log('📤 SUCCESS response sent to ESP32');
+        }
+        
+        // Broadcast to web clients
+        await broadcastToWebClients({
+            type: 'status',
+            data: currentStatus,
+            timestamp: new Date().toISOString()
+        });
+        
+        broadcastToWebClients({
+            type: 'rfid_entry',
+            data: {
+                rfidCode: rfidCode,
+                licensePlate: licensePlate,
+                entryTime: newAccess.entryTime,
+                imageUrl: imageUrl
+            },
+            timestamp: new Date().toISOString()
+        });
+        
+        console.log('=== ENTRY HANDLING COMPLETE ===\n');
+        
+    } catch (error) {
+        console.error('Error in handleEntryWithPlate:', error);
+        
+        // GỬI ERROR RESPONSE
+        if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
+            esp32Connection.send(JSON.stringify({
+                type: 'rfid_response',
+                data: {
+                    rfidCode: rfidCode,
+                    status: 'ERROR',
+                    message: 'Database error: ' + error.message
+                },
+                timestamp: new Date().toISOString()
+            }));
+        }
+    }
+}
+
+// ============ HANDLE EXIT WITH PLATE ============
+async function handleExitWithPlate(rfidCode, licensePlate, imageUrl) {
+    try {
+        console.log('\n=== HANDLING EXIT WITH PLATE ===');
+        console.log('RFID:', rfidCode);
+        console.log('License Plate:', licensePlate);
+        
+        const activeAccess = await RfidAccess.findOne({
+            rfidCode: rfidCode,
+            status: 'ACTIVE'
+        });
+        
+        if (!activeAccess) {
+            console.log('No active session found');
+            
+            // GỬI ERROR RESPONSE
+            if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
+                esp32Connection.send(JSON.stringify({
+                    type: 'rfid_response',
+                    data: {
+                        rfidCode: rfidCode,
+                        status: 'ERROR',
+                        message: 'No active session found',
+                        allowExit: false 
+                    },
+                    timestamp: new Date().toISOString()
+                }));
+            }
+            
+            return;
+        }
+        
+        // Update exit info
+        activeAccess.exitTime = new Date();
+        activeAccess.licensePlateExit = licensePlate;
+        activeAccess.exitImageUrl = imageUrl;
+        
+        // Check plate match
+        const plateMatch = activeAccess.checkPlateMatch();
+        activeAccess.plateMatch = plateMatch;
+        
+        if (!plateMatch) {
+            console.log(`🚨 PLATE MISMATCH: Entry=${activeAccess.licensePlateEntry}, Exit=${licensePlate}`);
+            activeAccess.status = 'MISMATCH';
+            activeAccess.mismatchReason = `Entry plate: ${activeAccess.licensePlateEntry}, Exit plate: ${licensePlate}`;
+            
+            await activeAccess.save();
+            
+            // GỬI MISMATCH RESPONSE
+            if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
+                esp32Connection.send(JSON.stringify({
+                    type: 'rfid_response',
+                    data: {
+                        rfidCode: rfidCode,
+                        status: 'PLATE_MISMATCH',
+                        message: 'License plate mismatch - Security alert',
+                        allowExit: false,
+                        entryPlate: activeAccess.licensePlateEntry,
+                        exitPlate: licensePlate
+                    },
+                    timestamp: new Date().toISOString()
+                }));
+            }
+            
+            // Broadcast security alert
+            broadcastToWebClients({
+                type: 'security_alert',
+                data: {
+                    alertType: 'PLATE_MISMATCH',
+                    rfidCode: rfidCode,
+                    entryPlate: activeAccess.licensePlateEntry,
+                    exitPlate: licensePlate,
+                    entryTime: activeAccess.entryTime,
+                    exitTime: activeAccess.exitTime,
+                    action: 'EXIT_DENIED'
+                },
+                timestamp: new Date().toISOString()
+            });
+            
+            return; // Dừng xử lý tiếp
+        }
+        
+        // Calculate fee
+        activeAccess.status = 'COMPLETED';
+        activeAccess.parkingFee = activeAccess.calculateParkingFee();
+        
+        await activeAccess.save();
+        console.log(`✅ Exit recorded: ${rfidCode} - Fee: ${activeAccess.parkingFee}`);
+        
+        // Update available slots
+        await updateAvailableSlotsFromRFID();
+        await sendStatusUpdateToESP32();
+        
+        // ✅ GỬI SUCCESS RESPONSE VỀ ESP32
+        if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
+            esp32Connection.send(JSON.stringify({
+                type: 'rfid_response',
+                data: {
+                    rfidCode: rfidCode,
+                    licensePlate: licensePlate,
+                    status: 'EXIT_RECORDED',
+                    message: 'Exit recorded - Gate opening',
+                    allowExit: true,    //Cho ra
+                    entryTime: activeAccess.entryTime,
+                    exitTime: activeAccess.exitTime,
+                    duration: activeAccess.duration,
+                    fee: activeAccess.parkingFee,
+                    plateMatch: true
+                },
+                timestamp: new Date().toISOString()
+            }));
+            
+            console.log('📤 SUCCESS response sent to ESP32');
+        }
+        
+        // Broadcast to web clients
+        await broadcastToWebClients({
+            type: 'status',
+            data: currentStatus,
+            timestamp: new Date().toISOString()
+        });
+        
+        broadcastToWebClients({
+            type: 'rfid_exit',
+            data: {
+                rfidCode: rfidCode,
+                licensePlate: licensePlate,
+                entryTime: activeAccess.entryTime,
+                exitTime: activeAccess.exitTime,
+                duration: activeAccess.duration,
+                fee: activeAccess.parkingFee,
+                plateMatch: true,
+                imageUrl: imageUrl
+            },
+            timestamp: new Date().toISOString()
+        });
+        
+        console.log('=== EXIT HANDLING COMPLETE ===\n');
+        
+    } catch (error) {
+        console.error('❌ Error in handleExitWithPlate:', error);
+        
+        // ✅ GỬI ERROR RESPONSE
+        if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
+            esp32Connection.send(JSON.stringify({
+                type: 'rfid_response',
+                data: {
+                    rfidCode: rfidCode,
+                    status: 'ERROR',
+                    message: 'Database error: ' + error.message
+                },
+                timestamp: new Date().toISOString()
+            }));
+        }
+    }
+}
+
+// ============ HANDLE WITHOUT PLATE (FALLBACK) ============
+async function handleEntryWithoutPlate(rfidCode, imageUrl) {
+    try {
+        console.log('\n=== HANDLING ENTRY WITHOUT PLATE ===');
+        console.log('RFID:', rfidCode);
+        
+        const newAccess = new RfidAccess({
+            rfidCode: rfidCode,
+            entryTime: new Date(),
+            entryImageUrl: imageUrl,
+            status: 'ACTIVE'
+        });
+        
+        await newAccess.save();
+        await updateAvailableSlotsFromRFID();
+        await sendStatusUpdateToESP32();
+        
+        // ✅ GỬI SUCCESS RESPONSE (dù không có plate)
+        if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
+            esp32Connection.send(JSON.stringify({
+                type: 'rfid_response',
+                data: {
+                    rfidCode: rfidCode,
+                    status: 'ENTRY_RECORDED',
+                    message: 'Entry recorded (no plate detected)',
+                    allowEntry: true
+                },
+                timestamp: new Date().toISOString()
+            }));
+            
+            console.log('📤 SUCCESS response sent (no plate)');
+        }
+        
+        await broadcastToWebClients({
+            type: 'status',
+            data: currentStatus,
+            timestamp: new Date().toISOString()
+        });
+        
+        console.log('=== ENTRY WITHOUT PLATE COMPLETE ===\n');
+        
+    } catch (error) {
+        console.error('❌ Error in handleEntryWithoutPlate:', error);
+        
+        if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
+            esp32Connection.send(JSON.stringify({
+                type: 'rfid_response',
+                data: {
+                    rfidCode: rfidCode,
+                    status: 'ERROR',
+                    message: 'Database error'
+                },
+                timestamp: new Date().toISOString()
+            }));
+        }
+    }
+}
+
+async function handleExitWithoutPlate(rfidCode, imageUrl) {
+    try {
+        console.log('\n=== HANDLING EXIT WITHOUT PLATE ===');
+        console.log('RFID:', rfidCode);
+        
+        const activeAccess = await RfidAccess.findOne({
+            rfidCode: rfidCode,
+            status: 'ACTIVE'
+        });
+        
+        if (!activeAccess) {
+            if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
+                esp32Connection.send(JSON.stringify({
+                    type: 'rfid_response',
+                    data: {
+                        rfidCode: rfidCode,
+                        status: 'ERROR',
+                        message: 'No active session'
+                    },
+                    timestamp: new Date().toISOString()
+                }));
+            }
+            return;
+        }
+        
+        activeAccess.exitTime = new Date();
+        activeAccess.exitImageUrl = imageUrl;
+        activeAccess.status = 'COMPLETED';
+        activeAccess.parkingFee = activeAccess.calculateParkingFee();
+        
+        await activeAccess.save();
+        await updateAvailableSlotsFromRFID();
+        await sendStatusUpdateToESP32();
+        
+        // ✅ GỬI SUCCESS RESPONSE
+        if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
+            esp32Connection.send(JSON.stringify({
+                type: 'rfid_response',
+                data: {
+                    rfidCode: rfidCode,
+                    status: 'EXIT_RECORDED',
+                    message: 'Exit recorded (no plate detected)',
+                    allowExit: true,
+                    duration: activeAccess.duration,
+                    fee: activeAccess.parkingFee
+                },
+                timestamp: new Date().toISOString()
+            }));
+            
+            console.log('📤 SUCCESS response sent (no plate)');
+        }
+        
+        await broadcastToWebClients({
+            type: 'status',
+            data: currentStatus,
+            timestamp: new Date().toISOString()
+        });
+        
+        console.log('=== EXIT WITHOUT PLATE COMPLETE ===\n');
+        
+    } catch (error) {
+        console.error('❌ Error in handleExitWithoutPlate:', error);
+        
+        if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
+            esp32Connection.send(JSON.stringify({
+                type: 'rfid_response',
+                data: {
+                    rfidCode: rfidCode,
+                    status: 'ERROR',
+                    message: 'Database error'
+                },
+                timestamp: new Date().toISOString()
+            }));
+        }
+    }
+}
 
 // ============ ORIGINAL ROUTES ============
 app.get('/', (req, res) => {
@@ -831,11 +1342,26 @@ app.get("/manager", async (req, res) => {
 
     // Định dạng thời gian cho bảng RFID
     rfidaccesses.forEach(r => {
-      r.entryTime = r.entryTime ? new Date(r.entryTime).toLocaleString("vi-VN") : "";
-      r.exitTime = r.exitTime ? new Date(r.exitTime).toLocaleString("vi-VN") : "";
+      r.entryTime = r.entryTime ? new Date(r.entryTime).toISOString() : "";
+      r.exitTime = r.exitTime ? new Date(r.exitTime).toISOString() : "";
       r.createdAt = r.createdAt ? new Date(r.createdAt).toLocaleString("vi-VN") : "";
-      r.updatedAt = r.updatedAt ? new Date(r.updatedAt).toLocaleString("vi-VN") : "";
-    });
+      r.updatedAt = r.updatedAt ? new Date(r.updatedAt).toLocaleString("vi-VN") : "";   
+
+
+                if (r.entryImageUrl && !r.entryImageUrl.startsWith('http')) {
+                // Nếu URL không có /uploads/, thêm vào
+                if (!r.entryImageUrl.startsWith('/uploads/')) {
+                r.entryImageUrl = `/uploads/license_plates/${r.entryImageUrl}`;
+                }
+                // Nếu đã có /uploads/ rồi thì giữ nguyên
+            }
+            
+            if (r.exitImageUrl && !r.exitImageUrl.startsWith('http')) {
+                if (!r.exitImageUrl.startsWith('/uploads/')) {
+                r.exitImageUrl = `/uploads/license_plates/${r.exitImageUrl}`;
+                }
+            }
+        });
 
     res.render("manager", { bookings, rfidaccesses});
   } catch (err) {
@@ -1069,6 +1595,284 @@ app.use((err, req, res, next) => {
     });
 });
 
+// ============ CAMERA ROUTES ============
+
+// Camera viewer page
+app.get('/camera', (req, res) => {
+    console.log('📹 Camera route hit!');
+    console.log('Session user:', req.session.user);
+    console.log('Hostname:', req.hostname);
+    console.log('Port:', port);
+    console.log('Views directory:', path.join(__dirname, 'views'));
+    
+    // Kiểm tra file có tồn tại không
+    const fs = require('fs');
+    const cameraPath = path.join(__dirname, 'views', 'camera.hbs');
+    console.log('Camera.hbs exists:', fs.existsSync(cameraPath));
+    console.log('Camera.hbs path:', cameraPath);
+    
+    res.render('camera', { 
+        user: req.session.user,
+        ws_host: req.hostname,
+        ws_port: port
+    });
+});
+
+// Get recent captured images
+app.get('/api/camera/recent-images', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 20;
+        
+        const recentAccess = await RfidAccess.find({
+            $or: [
+                { entryImageUrl: { $exists: true, $ne: null } },
+                { exitImageUrl: { $exists: true, $ne: null } }
+            ]
+        })
+        .sort({ updatedAt: -1 })
+        .limit(limit)
+        .lean();
+        
+        const images = [];
+        recentAccess.forEach(access => {
+            if (access.entryImageUrl) {
+                images.push({
+                    url: access.entryImageUrl,
+                    rfidCode: access.rfidCode,
+                    licensePlate: access.licensePlateEntry,
+                    action: 'ENTRY',
+                    timestamp: access.entryTime,
+                    status: access.status
+                });
+            }
+            if (access.exitImageUrl) {
+                images.push({
+                    url: access.exitImageUrl,
+                    rfidCode: access.rfidCode,
+                    licensePlate: access.licensePlateExit,
+                    action: 'EXIT',
+                    timestamp: access.exitTime,
+                    status: access.status,
+                    plateMatch: access.plateMatch
+                });
+            }
+        });
+        
+        // Sort by timestamp
+        images.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        res.json(images.slice(0, limit));
+    } catch (error) {
+        console.error('Error fetching recent images:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get camera status
+app.get('/api/camera/status', (req, res) => {
+    res.json({
+        connected: cameraConnection !== null && cameraConnection.readyState === WebSocket.OPEN,
+        streaming: streamClients.size > 0,
+        viewers: streamClients.size,
+        timestamp: new Date().toISOString()
+    });
+});
+
+// Get security alerts
+app.get('/api/security-alerts', async (req, res) => {
+    try {
+        const alerts = await RfidAccess.find({ 
+            status: 'MISMATCH' 
+        })
+        .sort({ updatedAt: -1 })
+        .limit(50)
+        .lean();
+        
+        res.json(alerts);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+async function processRfidWithoutCamera(rfidCode, action, timestamp, slotUsed) {
+    try {
+        console.log(`\n=== PROCESSING RFID WITHOUT CAMERA ===`);
+        console.log(`RFID: ${rfidCode}, Action: ${action}`);
+        
+        if (action === 'ENTER' || action === 'Entry') {
+            // ENTRY WITHOUT CAMERA
+            const existingAccess = await RfidAccess.findOne({
+                rfidCode: rfidCode,
+                status: 'ACTIVE'
+            });
+
+            if (existingAccess) {
+                console.log('⚠️ RFID already has active session');
+                
+                // ✅ GỬI ERROR
+                if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
+                    esp32Connection.send(JSON.stringify({
+                        type: 'rfid_response',
+                        data: {
+                            rfidCode: rfidCode,
+                            status: 'ERROR',
+                            message: 'Already has active session'
+                        },
+                        timestamp: new Date().toISOString()
+                    }));
+                }
+                return;
+            }
+
+            const newAccess = new RfidAccess({
+                rfidCode: rfidCode,
+                entryTime: timestamp ? new Date(timestamp) : new Date(),
+                slotUsed: slotUsed && slotUsed !== 'Unknown' ? slotUsed : null,
+                status: 'ACTIVE'
+            });
+
+            await newAccess.save();
+            console.log(`✅ Entry recorded (no camera): ${rfidCode}`);
+            
+            await updateAvailableSlotsFromRFID();
+            await sendStatusUpdateToESP32();
+
+            // ✅ GỬI SUCCESS
+            if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
+                esp32Connection.send(JSON.stringify({
+                    type: 'rfid_response',
+                    data: {
+                        rfidCode: rfidCode,
+                        status: 'ENTRY_RECORDED',
+                        message: 'Entry recorded (no camera)',
+                        allowEntry: true,
+                        entryTime: newAccess.entryTime,
+                        accessId: newAccess._id
+                    },
+                    timestamp: new Date().toISOString()
+                }));
+                
+                console.log('📤 SUCCESS response sent (no camera)');
+            }
+
+            await broadcastToWebClients({
+                type: 'status',
+                data: currentStatus,
+                timestamp: new Date().toISOString()
+            });
+
+        } else if (action === 'EXIT' || action === 'Exit') {
+            // EXIT WITHOUT CAMERA
+            const activeAccess = await RfidAccess.findOne({
+                rfidCode: rfidCode,
+                status: 'ACTIVE'
+            });
+
+            if (!activeAccess) {
+                console.log('⚠️ No active session found');
+                
+                // ✅ GỬI ERROR
+                if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
+                    esp32Connection.send(JSON.stringify({
+                        type: 'rfid_response',
+                        data: {
+                            rfidCode: rfidCode,
+                            status: 'ERROR',
+                            message: 'No active session found'
+                        },
+                        timestamp: new Date().toISOString()
+                    }));
+                }
+                return;
+            }
+
+            activeAccess.exitTime = timestamp ? new Date(timestamp) : new Date();
+            activeAccess.status = 'COMPLETED';
+            
+            const durationMs = activeAccess.exitTime - activeAccess.entryTime;
+            activeAccess.duration = Math.ceil(durationMs / (1000 * 60));
+            activeAccess.parkingFee = activeAccess.calculateParkingFee();
+
+            await activeAccess.save();
+            console.log(`✅ Exit recorded (no camera): ${rfidCode}, Fee: ${activeAccess.parkingFee}`);
+            
+            await updateAvailableSlotsFromRFID();
+            await sendStatusUpdateToESP32();
+
+            // ✅ GỬI SUCCESS
+            if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
+                esp32Connection.send(JSON.stringify({
+                    type: 'rfid_response',
+                    data: {
+                        rfidCode: rfidCode,
+                        status: 'EXIT_RECORDED',
+                        message: 'Exit recorded (no camera)',
+                        allowExit: true,
+                        entryTime: activeAccess.entryTime,
+                        exitTime: activeAccess.exitTime,
+                        duration: activeAccess.duration,
+                        fee: activeAccess.parkingFee
+                    },
+                    timestamp: new Date().toISOString()
+                }));
+                
+                console.log('📤 SUCCESS response sent (no camera)');
+            }
+
+            await broadcastToWebClients({
+                type: 'status',
+                data: currentStatus,
+                timestamp: new Date().toISOString()
+            });
+        }
+        
+        console.log('=== RFID WITHOUT CAMERA COMPLETE ===\n');
+
+    } catch (error) {
+        console.error('❌ Error processing RFID without camera:', error);
+        
+        // ✅ GỬI ERROR
+        if (esp32Connection && esp32Connection.readyState === WebSocket.OPEN) {
+            esp32Connection.send(JSON.stringify({
+                type: 'rfid_response',
+                data: {
+                    rfidCode: rfidCode,
+                    status: 'ERROR',
+                    message: 'Database error: ' + error.message
+                },
+                timestamp: new Date().toISOString()
+            }));
+        }
+    }
+}
+
+
+// Get RFID access with images
+app.get('/api/rfid-access/:rfidCode', async (req, res) => {
+    try {
+        const access = await RfidAccess.findOne({ 
+            rfidCode: req.params.rfidCode 
+        })
+        .sort({ createdAt: -1 })
+        .lean();
+        
+        if (!access) {
+            return res.status(404).json({ error: 'Access record not found' });
+        }
+        
+        res.json(access);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Cleanup old images (run daily)
+const cron = require('node-cron');
+cron.schedule('0 0 * * *', () => {
+    const deleted = cameraService.deleteOldImages(90);
+    console.log(`🗑️ Daily cleanup: ${deleted} old images deleted`);
+});
+
 // 404 handler
 app.use((req, res) => {
     res.status(404).json({
@@ -1079,9 +1883,7 @@ app.use((req, res) => {
 
 // Khởi động server với WebSocket support
 server.listen(port, async () => {
-    console.log(`🚀 RELIPARK Enhanced Server is running!`);
     console.log(`🌐 HTTP URL: http://localhost:${port}`);
-    console.log(`🔌 WebSocket: ws://localhost:${port}`);
     
     // Đồng bộ với database
     await syncSlotsWithDatabase();

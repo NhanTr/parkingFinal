@@ -1,4 +1,5 @@
 <link rel="stylesheet" href="/css/manager.css">
+<link rel="stylesheet" href="/css/cameradisplay.css">
 <div class="parking-container">
     <div id="parking-frame" class="parking-frame active">
         <div class="parking-card">
@@ -60,7 +61,6 @@
         </div>
             
         <div class="parking-card parking-history">
-            
               <!-- Form tìm kiếm & xóa -->
             <div class="booking-actions">
                 <input type="text" id="searchCode" placeholder="Nhập mã vé để tìm hoặc xóa">
@@ -70,7 +70,6 @@
 
             <div id="searchResult" class="search-result"></div>
 
-            
                 <!-- Nội dung lịch sử sẽ được thêm ở đây -->
             <table border="1" cellpadding="8" cellspacing="0">
                 <thead>
@@ -96,33 +95,165 @@
             </table>
         </div>
     </div>
+    
      <!-- Thêm div hiển thị thông tin từ bảng rfidAccess -->
         <div class="parking-card rfid-access-history">
-            <h3>Lịch sử truy cập RFID</h3>
-            <table border="1" cellpadding="8" cellspacing="0">
-                <thead>
-                    <tr>
-                        <th>Thẻ RFID</th>
-                        <th>Phí</th>
-                        <th>Thời gian vào</th>
-                        <th>Thời gian ra</th>
-                        <th>Trạng thái</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {{#each rfidaccesses}}
-                    <tr>
-                        <td>{{this.rfidCode}}</td>
-                        <td>{{this.parkingFee}}</td>
-                        <td>{{this.createdAt}}</td>
-                        <td>{{this.updatedAt}}</td>
-                        <td>{{this.status}}</td>
-                        
-                    </tr>
-                    {{/each}}
-                </tbody>
-            </table>
+            <div class="rfid-header">
+                <h3>📋 Lịch sử truy cập RFID</h3>
+                <a href="/camera" class="camera-link-button">
+                    📹 Xem Camera Trực Tiếp
+                </a>
+            </div>
+            
+            <!-- Filter section -->
+            <div class="rfid-filters">
+                <input type="text" id="rfidFilter" placeholder="Tìm theo RFID hoặc biển số..." class="filter-input">
+                <select id="statusFilter" class="filter-select">
+                    <option value="">Tất cả trạng thái</option>
+                    <option value="ACTIVE">ACTIVE</option>
+                    <option value="COMPLETED">COMPLETED</option>
+                    <option value="MISMATCH">MISMATCH</option>
+                </select>
+                <button onclick="applyFilters()" class="filter-btn">Lọc</button>
+                <button onclick="clearFilters()" class="filter-btn-clear">Xóa lọc</button>
+            </div>
+            
+            <div class="table-wrapper">
+                <table border="1" cellpadding="8" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Thẻ RFID</th>
+                            <th>Biển số vào</th>
+                            <th>Ảnh vào</th>
+                            <th>Biển số ra</th>
+                            <th>Ảnh ra</th>
+                            <th>Khớp?</th>
+                            <th>Phí</th>
+                            <th>Thời gian vào</th>
+                            <th>Thời gian ra</th>
+                            <th>Trạng thái</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rfidTableBody">
+                        {{#each rfidaccesses}}
+                            <tr class="{{#if this.plateMatch}}{{#eq this.plateMatch false}}security-row{{/eq}}{{/if}}" 
+                                data-rfid="{{this.rfidCode}}" 
+                                data-status="{{this.status}}" 
+                                data-entry-plate="{{this.licensePlateEntry}}" 
+                                data-exit-plate="{{this.licensePlateExit}}">
+                            <td><strong>{{this.rfidCode}}</strong></td>
+                            <td>
+                                {{#if this.licensePlateEntry}}
+                                    <span class="plate-number">{{this.licensePlateEntry}}</span>
+                                {{else}}
+                                    <span class="no-data">N/A</span>
+                                {{/if}}
+                            </td>
+                            <td>
+                                {{#if this.entryImageUrl}}
+                                <img src="{{this.entryImageUrl}}" 
+                                    class="license-plate-image" 
+                                    onclick="showImageModal('{{this.entryImageUrl}}', '{{this.rfidCode}}', 'ENTRY', '{{this.licensePlateEntry}}', '{{this.entryTime}}')"
+                                    alt="Entry Image"
+                                    loading="lazy">
+                                {{else}}
+                                <span class="no-data">Không có ảnh</span>
+                                {{/if}}
+                            </td>
+                            <td>
+                                {{#if this.licensePlateExit}}
+                                    <span class="plate-number">{{this.licensePlateExit}}</span>
+                                {{else}}
+                                    <span class="no-data">N/A</span>
+                                {{/if}}
+                            </td>
+                            <td>
+                                {{#if this.exitImageUrl}}
+                                <img src="{{this.exitImageUrl}}" 
+                                    class="license-plate-image" 
+                                    onclick="showImageModal('{{this.exitImageUrl}}', '{{this.rfidCode}}', 'EXIT', '{{this.licensePlateExit}}', '{{this.exitTime}}')"
+                                    alt="Exit Image"
+                                    loading="lazy">
+                                {{else}}
+                                <span class="no-data">Không có ảnh</span>
+                                {{/if}}
+                            </td>
+                            <td>
+                                {{#if this.plateMatch}}
+                                <span class="status-match">✓ Khớp</span>
+                                {{else}}
+                                {{#eq this.plateMatch false}}
+                                <span class="status-mismatch blink">✗ Không khớp</span>
+                                {{else}}
+                                <span class="no-data">N/A</span>
+                                {{/eq}}
+                                {{/if}}
+                            </td>
+                            <td>
+                                {{#if this.parkingFee}}
+                                    <strong>{{this.parkingFee}} VND</strong>
+                                {{else}}
+                                    <span class="no-data">N/A</span>
+                                {{/if}}
+                            </td>
+                            <td>
+                                {{#if this.entryTime}}
+                                    {{this.entryTime}}
+                                {{else}}
+                                    <span class="no-data">Chưa vào</span>
+                                {{/if}}
+                            </td>
+                            <td>
+                                {{#if this.exitTime}}
+                                    {{this.exitTime}}
+                                {{else}}
+                                    <span class="no-data">Chưa ra</span>
+                                {{/if}}
+                            </td>
+                            <td>
+                                {{#eq this.status "MISMATCH"}}
+                                <span class="status-badge status-mismatch">⚠️ {{this.status}}</span>
+                                {{else}}
+                                {{#eq this.status "ACTIVE"}}
+                                <span class="status-badge status-active">🟢 {{this.status}}</span>
+                                {{else}}
+                                {{#eq this.status "COMPLETED"}}
+                                <span class="status-badge status-completed">✅ {{this.status}}</span>
+                                {{else}}
+                                <span class="status-badge">{{this.status}}</span>
+                                {{/eq}}
+                                {{/eq}}
+                                {{/eq}}
+                            </td>
+                        </tr>
+                        {{/each}}
+                    </tbody>
+                </table>
+            </div>
         </div>
     <!-- Kết thúc div RFID -->
 </div>
+
+<!-- Image Modal with Enhanced Info -->
+<div id="imageModal" class="image-modal" onclick="closeImageModal(event)">
+    <span class="close-modal">&times;</span>
+    <div class="modal-container">
+        <img class="modal-content" id="modalImage">
+        <div class="modal-info" id="modalInfo">
+            <h3 id="modalTitle"></h3>
+            <div class="modal-details">
+                <p><strong>RFID:</strong> <span id="modalRFID"></span></p>
+                <p><strong>Hành động:</strong> <span id="modalAction"></span></p>
+                <p><strong>Biển số:</strong> <span id="modalPlate"></span></p>
+                <p><strong>Thời gian:</strong> <span id="modalTime"></span></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SCRIPTS -->
+<!-- Manager.js gốc - Xử lý parking slots, gates, bookings -->
 <script src="js/manager.js"></script>
+
+<!-- Manager RFID module - Xử lý RFID table, images, filters -->
+<script src="js/manager-rfid.js"></script>

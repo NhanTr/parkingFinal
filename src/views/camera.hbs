@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Monitor - Smart Parking</title>
+    <link rel="stylesheet" href="/css/camera.css">
+</head>
+<body>
+    <div class="camera-container">
+        <div class="camera-header">
+            <div class="header-left">
+                <a href="/manager" class="back-btn">← Quay lại Manager</a>
+                <h1>📹 Camera Monitor</h1>
+            </div>
+            <div class="status-indicator">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Đang kết nối...</span>
+            </div>
+        </div>
+
+        <div class="camera-main">
+            <div class="camera-feed-section">
+                <div class="section-header">
+                    <h2>Live Camera Feed</h2>
+                    <span class="fps-counter" id="fpsCounter">0 FPS</span>
+                </div>
+                
+                <div class="live-feed" id="liveFeed">
+                    <div class="no-signal">
+                        <div class="signal-icon">📷</div>
+                        <p>Chưa có tín hiệu</p>
+                        <p id="feedStatus">Nhấn "Bắt đầu Stream" để xem</p>
+                    </div>
+                </div>
+                
+                <div class="camera-controls">
+                    <button class="control-btn start-btn" id="startBtn" onclick="startStream()">
+                        ▶️ Bắt đầu Stream
+                    </button>
+                    <button class="control-btn stop-btn" id="stopBtn" onclick="stopStream()" disabled>
+                        ⏹️ Dừng Stream
+                    </button>
+                    <button class="control-btn refresh-btn" onclick="refreshCamera()">
+                        🔄 Làm mới
+                    </button>
+                </div>
+            </div>
+
+            <div class="camera-info-section">
+                <h2>Thông tin Camera</h2>
+                <div class="info-grid">
+                    <div class="info-card">
+                        <div class="info-icon">🟢</div>
+                        <div class="info-content">
+                            <span class="info-label">Trạng thái</span>
+                            <span class="info-value" id="cameraStatus">Offline</span>
+                        </div>
+                    </div>
+                    
+                    <div class="info-card">
+                        <div class="info-icon">👥</div>
+                        <div class="info-content">
+                            <span class="info-label">Người xem</span>
+                            <span class="info-value" id="viewerCount">0</span>
+                        </div>
+                    </div>
+                    
+                    <div class="info-card">
+                        <div class="info-icon">📐</div>
+                        <div class="info-content">
+                            <span class="info-label">Độ phân giải</span>
+                            <span class="info-value">800x600</span>
+                        </div>
+                    </div>
+                    
+                    <div class="info-card">
+                        <div class="info-icon">🎥</div>
+                        <div class="info-content">
+                            <span class="info-label">Thiết bị</span>
+                            <span class="info-value">ESP32-CAM</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="camera-stats">
+                    <h3>Thống kê</h3>
+                    <div class="stat-item">
+                        <span>Khung hình đã nhận:</span>
+                        <strong id="frameCount">0</strong>
+                    </div>
+                    <div class="stat-item">
+                        <span>Thời gian stream:</span>
+                        <strong id="streamTime">00:00:00</strong>
+                    </div>
+                    <div class="stat-item">
+                        <span>Chất lượng kết nối:</span>
+                        <strong id="connectionQuality">Tốt</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="recent-captures-section">
+            <div class="section-header">
+                <h2>Ảnh chụp gần đây</h2>
+                <button class="refresh-btn-small" onclick="loadRecentImages()">🔄 Làm mới</button>
+            </div>
+            
+            <div class="captures-grid" id="capturesGrid">
+                <div class="loading-message">Đang tải ảnh...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Modal -->
+    <div id="imageModal" class="image-modal" onclick="closeImageModal()">
+        <span class="modal-close">&times;</span>
+        <div class="modal-wrapper">
+            <img class="modal-image" id="modalImage">
+            <div class="modal-info">
+                <h3 id="modalTitle"></h3>
+                <div class="modal-details">
+                    <p><strong>RFID:</strong> <span id="modalRFID"></span></p>
+                    <p><strong>Hành động:</strong> <span id="modalAction"></span></p>
+                    <p><strong>Biển số:</strong> <span id="modalPlate"></span></p>
+                    <p><strong>Thời gian:</strong> <span id="modalTime"></span></p>
+                    <p><strong>Trạng thái:</strong> <span id="modalStatus"></span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/camera-client.js"></script>
+</body>
+</html>

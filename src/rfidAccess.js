@@ -24,11 +24,37 @@ const rfidAccessSchema = new mongoose.Schema({
     default: null
   },
   status: {
-    type: String,
-    enum: ['ACTIVE', 'COMPLETED'],
-    default: 'ACTIVE'
-  },
+        type: String,
+        enum: ['ACTIVE', 'COMPLETED', 'PENDING', 'MISMATCH'], // Thêm 'MISMATCH'
+        default: 'ACTIVE'
+    },
   slotUsed: {
+    type: String,
+    default: null
+  },
+  licensePlateEntry: {
+    type: String,
+    default: null,
+    trim: true
+  },
+  licensePlateExit: {
+    type: String,
+    default: null,
+    trim: true
+  },
+  entryImageUrl: {
+    type: String,
+    default: null
+  },
+  exitImageUrl: {
+    type: String,
+    default: null
+  },
+  plateMatch: {
+    type: Boolean,
+    default: null
+  },
+  mismatchReason: {
     type: String,
     default: null
   }
@@ -39,6 +65,7 @@ const rfidAccessSchema = new mongoose.Schema({
 // Index để tìm kiếm nhanh theo mã RFID và trạng thái
 rfidAccessSchema.index({ rfidCode: 1, status: 1 });
 rfidAccessSchema.index({ entryTime: -1 });
+rfidAccessSchema.index({ licensePlateEntry: 1 });
 
 rfidAccessSchema.methods.calculateParkingFee = function() {
   if (!this.exitTime) return 0;
@@ -59,6 +86,19 @@ rfidAccessSchema.methods.calculateParkingFee = function() {
   this.parkingFee = totalFee;
   
   return totalFee;
+};
+
+// Kiểm tra khớp biển số
+rfidAccessSchema.methods.checkPlateMatch = function() {
+  if (!this.licensePlateEntry || !this.licensePlateExit) {
+    return false;
+  }
+  
+  // Chuẩn hóa biển số (loại bỏ khoảng trắng, chuyển về uppercase)
+  const entryNormalized = this.licensePlateEntry.replace(/\s+/g, '').toUpperCase();
+  const exitNormalized = this.licensePlateExit.replace(/\s+/g, '').toUpperCase();
+  
+  return entryNormalized === exitNormalized;
 };
 
 module.exports = mongoose.model('RfidAccess', rfidAccessSchema);

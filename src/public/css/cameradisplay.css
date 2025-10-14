@@ -1,0 +1,542 @@
+/* ===== LICENSE PLATE IMAGES ===== */
+.license-plate-image {
+    max-width: 100px;
+    max-height: 70px;
+    cursor: pointer;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+    object-fit: cover;
+}
+
+.license-plate-image:hover {
+    border-color: #4CAF50;
+    transform: scale(1.1);
+    box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
+}
+
+/* ===== IMAGE MODAL ===== */
+.image-modal {
+    display: none;
+    position: fixed;
+    z-index: 9999;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.95);
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 90%;
+    max-height: 90vh;
+    background: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+}
+
+.modal-content {
+    max-width: 100%;
+    max-height: 70vh;
+    object-fit: contain;
+    border-bottom: 2px solid #f0f0f0;
+}
+
+.modal-info {
+    padding: 20px;
+    width: 100%;
+    background: white;
+}
+
+.modal-info h3 {
+    margin: 0 0 15px 0;
+    color: #333;
+    font-size: 20px;
+    border-bottom: 2px solid #4CAF50;
+    padding-bottom: 10px;
+}
+
+.modal-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.modal-details p {
+    margin: 8px 0;
+    color: #555;
+    font-size: 14px;
+}
+
+.modal-details strong {
+    color: #333;
+    display: inline-block;
+    min-width: 100px;
+}
+
+.close-modal {
+    position: absolute;
+    top: 20px;
+    right: 35px;
+    color: #f1f1f1;
+    font-size: 50px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    z-index: 10000;
+}
+
+.close-modal:hover {
+    color: #ff4444;
+    transform: scale(1.1);
+}
+
+/* ===== STATUS INDICATORS ===== */
+.status-match {
+    color: #4CAF50;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.status-mismatch {
+    color: #F44336;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.blink {
+    animation: blink-animation 1.5s infinite;
+}
+
+@keyframes blink-animation {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+/* ===== STATUS BADGES ===== */
+.status-badge {
+    display: inline-block;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-active {
+    background: #E3F2FD;
+    color: #1976D2;
+}
+
+.status-completed {
+    background: #E8F5E9;
+    color: #388E3C;
+}
+
+.status-mismatch {
+    background: #FFEBEE;
+    color: #D32F2F;
+    animation: pulse-warning 2s infinite;
+}
+
+@keyframes pulse-warning {
+    0%, 100% { 
+        background: #FFEBEE;
+        transform: scale(1);
+    }
+    50% { 
+        background: #FFCDD2;
+        transform: scale(1.05);
+    }
+}
+
+/* ===== SECURITY ALERT ===== */
+.security-alert {
+    background: linear-gradient(135deg, #fff3cd 0%, #ffe4a3 100%);
+    border: 2px solid #ffc107;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 8px;
+    animation: pulse-alert 2s infinite;
+}
+
+@keyframes pulse-alert {
+    0%, 100% { 
+        box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7);
+    }
+    50% { 
+        box-shadow: 0 0 0 10px rgba(255, 193, 7, 0);
+    }
+}
+
+.security-row {
+    background-color: #ffebee !important;
+    animation: highlight-row 3s ease-in-out;
+}
+
+.security-row:hover {
+    background-color: #ffcdd2 !important;
+}
+
+@keyframes highlight-row {
+    0% { background-color: #ff8a80; }
+    100% { background-color: #ffebee; }
+}
+
+/* ===== RFID HEADER ===== */
+.rfid-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #e0e0e0;
+}
+
+.rfid-header h3 {
+    margin: 0;
+    color: #12842b;
+    font-size: 22px;
+    font-weight: 600;
+}
+
+.camera-link-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 25px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 6px rgba(33, 150, 243, 0.3);
+}
+
+.camera-link-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(33, 150, 243, 0.4);
+    background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
+}
+
+/* ===== FILTERS ===== */
+.rfid-filters {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    flex-wrap: wrap;
+}
+
+.filter-input {
+    flex: 1;
+    min-width: 200px;
+    padding: 10px 15px;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: all 0.3s;
+}
+
+.filter-input:focus {
+    outline: none;
+    border-color: #4CAF50;
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+}
+
+.filter-select {
+    padding: 10px 15px;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.filter-select:focus {
+    outline: none;
+    border-color: #4CAF50;
+}
+
+.filter-btn {
+    padding: 10px 20px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.filter-btn:hover {
+    background: #45a049;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
+}
+
+.filter-btn-clear {
+    padding: 10px 20px;
+    background: #9E9E9E;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.filter-btn-clear:hover {
+    background: #757575;
+}
+
+/* ===== TABLE WRAPPER ===== */
+.table-wrapper {
+    overflow-x: auto;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.table-wrapper table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+}
+
+.table-wrapper th {
+    position: sticky;
+    top: 0;
+    background: #2c3e50;
+    color: white;
+    padding: 15px 10px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    z-index: 10;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.table-wrapper td {
+    padding: 12px 10px;
+    text-align: center;
+    font-size: 14px;
+    border-bottom: 1px solid #ecf0f1;
+}
+
+.table-wrapper tr:hover {
+    background: #f8f9fa;
+}
+
+.table-wrapper tr:nth-child(even) {
+    background: #fafbfc;
+}
+
+/* ===== DATA FORMATTING ===== */
+.plate-number {
+    display: inline-block;
+    padding: 4px 10px;
+    background: #FFF3E0;
+    border: 2px solid #FF9800;
+    border-radius: 4px;
+    font-weight: bold;
+    color: #E65100;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 1px;
+}
+
+.no-data {
+    color: #999;
+    font-style: italic;
+    font-size: 13px;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 1200px) {
+    .modal-details {
+        grid-template-columns: 1fr;
+    }
+    
+    .rfid-filters {
+        flex-direction: column;
+    }
+    
+    .filter-input {
+        min-width: 100%;
+    }
+}
+
+@media (max-width: 768px) {
+    .license-plate-image {
+        max-width: 60px;
+        max-height: 45px;
+    }
+    
+    .table-wrapper {
+        font-size: 12px;
+    }
+    
+    .table-wrapper th,
+    .table-wrapper td {
+        padding: 8px 5px;
+    }
+    
+    .modal-container {
+        max-width: 95%;
+    }
+    
+    .modal-info {
+        padding: 15px;
+    }
+    
+    .close-modal {
+        font-size: 40px;
+        top: 10px;
+        right: 15px;
+    }
+    
+    .rfid-header {
+        flex-direction: column;
+        gap: 15px;
+        align-items: flex-start;
+    }
+    
+    .camera-link-button {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* ===== LOADING STATE ===== */
+.loading-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(76, 175, 80, 0.3);
+    border-radius: 50%;
+    border-top-color: #4CAF50;
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ===== EMPTY STATE ===== */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #999;
+}
+
+.empty-state-icon {
+    font-size: 64px;
+    margin-bottom: 20px;
+    opacity: 0.5;
+}
+
+.empty-state-text {
+    font-size: 18px;
+    margin-bottom: 10px;
+}
+
+/* ===== TOOLTIP ===== */
+.tooltip {
+    position: relative;
+    display: inline-block;
+}
+
+.tooltip .tooltiptext {
+    visibility: hidden;
+    width: 200px;
+    background-color: #555;
+    color: #fff;
+    text-align: center;
+    border-radius: 6px;
+    padding: 8px;
+    position: absolute;
+    z-index: 1;
+    bottom: 125%;
+    left: 50%;
+    margin-left: -100px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    font-size: 12px;
+}
+
+.tooltip:hover .tooltiptext {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* ===== IMAGE ZOOM EFFECT ===== */
+@keyframes imageZoom {
+    from {
+        transform: scale(0.8);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.modal-content {
+    animation: imageZoom 0.3s ease-out;
+}
+
+/* ===== NOTIFICATION BADGE ===== */
+.notification-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: #F44336;
+    color: white;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: bold;
+    animation: bounce 1s infinite;
+}
+
+@keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+
+/* ===== PRINT STYLES ===== */
+@media print {
+    .camera-link-button,
+    .rfid-filters,
+    .gate-controls,
+    .image-modal {
+        display: none !important;
+    }
+    
+    .license-plate-image {
+        max-width: 80px;
+        max-height: 60px;
+    }
+    
+    .table-wrapper {
+        box-shadow: none;
+    }
+}

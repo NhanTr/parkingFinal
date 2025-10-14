@@ -1,4 +1,3 @@
-// Cập nhật trạng thái booking
 async function updateBookingStatus(bookingCode, newStatus) {
   try {
     const response = await fetch(`/api/manager/${bookingCode}/status`, {
@@ -19,12 +18,12 @@ async function updateBookingStatus(bookingCode, newStatus) {
     alert("Lỗi kết nối server");
   }
 }
+
 let ws;
-let tempReservations = {}; // {slotId: {timer: timeoutId, endTime: timestamp}}
+let tempReservations = {};
+let cameraOnline = false;
 
-
-// ======================= Định dạng ngày giờ =======================
-
+// Format Vietnam time
 function formatVietnamTime(dateString) {
   if (!dateString || dateString === '-') return '-';
   
@@ -32,7 +31,6 @@ function formatVietnamTime(dateString) {
   
   if (isNaN(date.getTime())) return '-';
   
-  // Convert sang giờ VN bằng toLocaleString
   const options = {
     timeZone: 'Asia/Ho_Chi_Minh',
     year: 'numeric',
@@ -53,12 +51,11 @@ function formatVietnamTime(dateString) {
 }
 
 function formatAllDates() {
-  // Format bảng bookings
   const bookingTable = document.querySelector('.parking-history table tbody');
   if (bookingTable) {
     const rows = bookingTable.querySelectorAll('tr');
     rows.forEach(row => {
-      const dateCell = row.cells[3]; // Cột "Ngày đặt" (index 3)
+      const dateCell = row.cells[3];
       if (dateCell) {
         const originalDate = dateCell.textContent.trim();
         dateCell.textContent = formatVietnamTime(originalDate);
@@ -66,20 +63,17 @@ function formatAllDates() {
     });
   }
   
-  // Format bảng RFID Access
   const rfidTable = document.querySelector('.rfid-access-history table tbody');
   if (rfidTable) {
     const rows = rfidTable.querySelectorAll('tr');
     rows.forEach(row => {
-      // Cột "Thời gian vào" (index 2)
-      const entryCell = row.cells[2];
+      const entryCell = row.cells[7];
       if (entryCell) {
         const originalDate = entryCell.textContent.trim();
         entryCell.textContent = formatVietnamTime(originalDate);
       }
       
-      // Cột "Thời gian cập nhật" (index 3)
-      const updateCell = row.cells[3];
+      const updateCell = row.cells[8];
       if (updateCell) {
         const originalDate = updateCell.textContent.trim();
         updateCell.textContent = formatVietnamTime(originalDate);
@@ -93,54 +87,125 @@ function initWebSocket(){
 
   ws.onopen = () => {
     console.log("✅ WebSocket connected (Manager)");
-    // gửi tín hiệu báo đây là web client
     ws.send(JSON.stringify({ type: "web_client_connect" }));
   };
   
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
 
+    // Camera status
+    if (msg.type === "camera_connected") {
+      cameraOnline = true;
+      console.log("📷 Camera online");
+      showNotification("Camera hệ thống đã kết nối", 'success');
+      updateCameraStatus(true);
+    }
 
-    // Cập nhật trạng thái chỗ đỗ
+    // Status update
     if (msg.type === "status" && msg.data) {
       const status = msg.data;
-      console.log("📊 Cập nhật trạng thái:", status);
+      console.log("📊 Status update:", status);
       
-
-      // Cập nhật số chỗ khả dụng
       document.querySelector(".available-count").textContent =
         `Chỗ khả dụng: ${status.availableSlots}/${status.totalSlots}`;
 
-      // Cập nhật trạng thái các nút A1..A4
       const slotBtns = document.querySelectorAll(".slot-btn");
       status.slots.forEach((s, i) => {
         const btn = slotBtns[i];
         if (!btn) return;
 
-        // Remove all status classes first
         btn.classList.remove('available', 'occupied', 'reserved');
         
         if (s === 0) {
-          btn.style.backgroundColor = "green";   // còn trống
+          btn.style.backgroundColor = "green";
           btn.classList.add('available');
-          btn.disabled = false; // cho phép click
+          btn.disabled = false;
         } else if (s === 1) {
-          btn.style.backgroundColor = "red";     // có xe
+          btn.style.backgroundColor = "red";
           btn.classList.add('occupied');
-          btn.disabled = true; // không cho phép click
+          btn.disabled = true;
         } else if (s === 2) {
-          btn.style.backgroundColor = "orange";  // đã giữ chỗ
+          btn.style.backgroundColor = "orange";
           btn.classList.add('reserved');
-          btn.disabled = true; // không cho phép click khi đã reserved
+          btn.disabled = true;
         }
       });
 
-      // cập nhật trạng thái gate
       setGateStatus("gate1", status.entryGateOpen);
       setGateStatus("gate2", status.exitGateOpen);
     }
 
-    // ====== Phản hồi điều khiển cổng ======
+    // RFID Entry with image
+    if (msg.type === "rfid_entry") {
+      const { rfidCode, licensePlate, imageUrl, entryTime } = msg.data;
+      console.log("🚗 RFID Entry:", rfidCode, licensePlate);
+        
+        showNotification(
+            `✅ Xe vào: ${licensePlate || rfidCode}\n${imageUrl ? '📸 Đã chụp ảnh' : '⚠️ Không có ảnh'}`, 
+            'success'
+        );
+        // ✅ Auto refresh manager table sau 2 giây
+        setTimeout(() => {
+            location.reload();
+        }, 2000);
+    }
+
+    // RFID Exit with image
+    if (msg.type === "rfid_exit") {
+        const { rfidCode, licensePlate, fee, duration, plateMatch, imageUrl } = msg.data;
+        
+        console.log("🚙 RFID Exit:", rfidCode, licensePlate, fee);
+        
+        if (plateMatch === false) {
+            showNotification(
+                `🚨 CẢNH BÁO: Biển số không khớp!\nRFID: ${rfidCode}`, 
+                'error'
+            );
+            playAlertSound();
+        } else {
+            showNotification(
+                `Xe ra: ${licensePlate || rfidCode}\nPhí: ${fee}đ (${duration}p)\n${imageUrl ? '📸 Đã chụp ảnh' : ''}`, 
+                'success'
+            );
+        }
+        
+        // Auto refresh manager table sau 2 giây
+        setTimeout(() => {
+            location.reload();
+        }, 2000);
+    }
+
+    if (msg.type === "parking_full") {
+        showNotification('BÃI ĐẦY - Không thể vào thêm xe', 'warning');
+        playAlertSound();
+    }
+
+    // Security Alert
+    if (msg.type === "security_alert") {
+      const { alertType, rfidCode, entryPlate, exitPlate } = msg.data;
+      
+      if (alertType === "PLATE_MISMATCH") {
+        showNotification(
+          `🚨 CẢNH BÁO: Biển số không khớp!\nVào: ${entryPlate}\nRa: ${exitPlate}`, 
+          'error'
+        );
+        
+        // Add to security alerts section
+        addSecurityAlert({
+          rfidCode,
+          entryPlate,
+          exitPlate,
+          timestamp: new Date(),
+          timestamp: new Date(),
+          action: action || 'EXIT_DENIED'
+        });
+        
+        // Play alert sound
+        playAlertSound();
+      }
+    }
+
+    // Gate control response
     if (msg.type === "gate_control_response") {
       if (msg.success) {
         console.log("✅ Gate response:", msg.message);
@@ -149,7 +214,7 @@ function initWebSocket(){
       }
     }
 
-    // ====== ESP32 connect/disconnect ======
+    // ESP32 connect/disconnect
     if (msg.type === "esp32_connected") {
       console.log("🔌 ESP32 online");
       showNotification("ESP32 đã kết nối", 'success');
@@ -170,19 +235,153 @@ function initWebSocket(){
   };
 }
 
-initWebSocket();
-
-// ======================= Chức năng đặt chỗ =======================
-
-// Helper function để lấy slot index
-function getSlotIndex(slotId) {
-  const map = { 'A1': 0, 'A2': 1, 'A3': 2, 'A4': 3 };
-  return map[slotId] || 0;
+function autoRefreshImages() {
+    setInterval(() => {
+        // Check if on manager page with RFID table
+        const rfidTable = document.querySelector('.rfid-access-history');
+        if (rfidTable) {
+            console.log('🔄 Auto-refreshing RFID table...');
+            
+            // Soft reload: chỉ reload nếu có data mới
+            fetch('/api/parking-status')
+                .then(res => res.json())
+                .then(data => {
+                    // Kiểm tra có cập nhật mới không
+                    const lastUpdate = localStorage.getItem('lastRfidUpdate');
+                    const currentUpdate = data.timestamp;
+                    
+                    if (lastUpdate !== currentUpdate) {
+                        console.log('📊 New data available, refreshing...');
+                        localStorage.setItem('lastRfidUpdate', currentUpdate);
+                        location.reload();
+                    }
+                })
+                .catch(err => console.error('Auto-refresh error:', err));
+        }
+    }, 30000); // Mỗi 30 giây
 }
 
-// ======================= Hiển thị thông báo =======================
+// Camera status indicator
+function updateCameraStatus(online) {
+  let indicator = document.getElementById('cameraStatus');
+  if (!indicator) {
+    indicator = document.createElement('div');
+    indicator.id = 'cameraStatus';
+    indicator.style.cssText = `
+      position: fixed;
+      top: 70px;
+      right: 20px;
+      padding: 8px 15px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: bold;
+      z-index: 999;
+    `;
+    document.body.appendChild(indicator);
+  }
+  
+  if (online) {
+    indicator.textContent = '📷 Camera Online';
+    indicator.style.backgroundColor = '#4CAF50';
+    indicator.style.color = 'white';
+  } else {
+    indicator.textContent = '📷 Camera Offline';
+    indicator.style.backgroundColor = '#F44336';
+    indicator.style.color = 'white';
+  }
+}
+
+// Add security alert to UI
+function addSecurityAlert(alert) {
+  const alertsDiv = document.getElementById('securityAlerts');
+  if (!alertsDiv) {
+    const newDiv = document.createElement('div');
+    newDiv.id = 'securityAlerts';
+    newDiv.style.cssText = `
+      position: fixed;
+      top: 120px;
+      right: 20px;
+      max-width: 400px;
+      z-index: 1000;
+    `;
+    document.body.appendChild(newDiv);
+  }
+  
+  const alertElement = document.createElement('div');
+  alertElement.className = 'security-alert';
+  alertElement.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+      <span style="font-size: 30px;">🚨</span>
+      <strong style="font-size: 18px;">CẢNH BÁO BẢO MẬT</strong>
+    </div>
+    <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+      <div><strong>RFID:</strong> ${alert.rfidCode}</div>
+      <div><strong>Biển số vào:</strong> <span style="color: #90EE90">${alert.entryPlate}</span></div>
+      <div><strong>Biển số ra:</strong> <span style="color: #FFB6C1">${alert.exitPlate}</span></div>
+      <div><strong>Thời gian:</strong> ${alert.timestamp.toLocaleString('vi-VN')}</div>
+      <div style="margin-top: 10px; padding: 8px; background: rgba(255,255,255,0.2); border-radius: 5px;">
+        <strong>⛔ TRẠNG THÁI: ${alert.action || 'EXIT_DENIED'}</strong>
+      </div>
+    </div>
+    <button onclick="resolveAlert(this)" style="
+      width: 100%;
+      padding: 10px;
+      background: white;
+      color: #cc0000;
+      border: none;
+      border-radius: 5px;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 14px;
+    ">Đã xử lý</button>
+  `;
+  
+  const alertsContainer = document.getElementById('securityAlerts');
+  alertsContainer.insertBefore(alertElement, alertsContainer.firstChild);
+  
+  if (!document.getElementById('alertAnimationStyle')) {
+    const style = document.createElement('style');
+    style.id = 'alertAnimationStyle';
+    style.textContent = `
+      @keyframes alertPulse {
+        0%, 100% { box-shadow: 0 4px 20px rgba(255, 0, 0, 0.5); }
+        50% { box-shadow: 0 4px 30px rgba(255, 0, 0, 0.9); }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+}
+
+// Resolve security alert
+function resolveAlert(button) {
+  const alertElement = button.closest('.security-alert');
+  alertElement.style.opacity = '0';
+  setTimeout(() => alertElement.remove(), 300);
+}
+
+// Play alert sound
+function playAlertSound() {
+  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  const oscillator = audioContext.createOscillator();
+  const gainNode = audioContext.createGain();
+  
+  oscillator.connect(gainNode);
+  gainNode.connect(audioContext.destination);
+  
+  oscillator.frequency.value = 800;
+  oscillator.type = 'sine';
+  gainNode.gain.value = 0.3;
+  
+  oscillator.start();
+  setTimeout(() => oscillator.stop(), 200);
+  setTimeout(() => {
+    oscillator.start();
+    setTimeout(() => oscillator.stop(), 200);
+  }, 300);
+}
+
+// Show notification
 function showNotification(message, type = 'info') {
-  // Tạo element notification nếu chưa có
   let notification = document.getElementById('notification');
   if (!notification) {
     notification = document.createElement('div');
@@ -200,11 +399,11 @@ function showNotification(message, type = 'info') {
       opacity: 0;
       transform: translateX(100%);
       transition: all 0.3s ease;
+      white-space: pre-line;
     `;
     document.body.appendChild(notification);
   }
 
-  // Set màu theo loại thông báo
   const colors = {
     success: '#4CAF50',
     error: '#F44336', 
@@ -215,20 +414,18 @@ function showNotification(message, type = 'info') {
   notification.style.backgroundColor = colors[type] || colors.info;
   notification.textContent = message;
   
-  // Show animation
   setTimeout(() => {
     notification.style.opacity = '1';
     notification.style.transform = 'translateX(0)';
   }, 100);
 
-  // Hide animation
   setTimeout(() => {
     notification.style.opacity = '0';
     notification.style.transform = 'translateX(100%)';
-  }, 3000);
+  }, 5000);
 }
 
-// ======================= Cập nhật giao diện =======================
+// Set gate status
 function setGateStatus(gateId, isOpen) {
   const gateEl = document.getElementById(
     gateId === "gate1" ? "gateSwitch1" : "gateSwitch2"
@@ -239,7 +436,7 @@ function setGateStatus(gateId, isOpen) {
   else gateEl.classList.remove("active");
 }
 
-// ======================= Điều khiển gate =======================
+// Toggle gate
 function toggleGate(gateId) {
   if (!ws || ws.readyState !== WebSocket.OPEN) {
     showNotification("⚠️ Mất kết nối WebSocket!", 'error');
@@ -254,7 +451,19 @@ function toggleGate(gateId) {
   console.log("🚪 Sent gate control:", gateId);
 }
 
-// Gắn sự kiện click cho gateSwitch và slot buttons
+// Image modal
+function showImageModal(imageUrl) {
+  const modal = document.getElementById('imageModal');
+  const modalImg = document.getElementById('modalImage');
+  modal.style.display = 'block';
+  modalImg.src = imageUrl;
+}
+
+function closeImageModal() {
+  document.getElementById('imageModal').style.display = 'none';
+}
+
+// Initialize on load
 document.addEventListener("DOMContentLoaded", () => {
   const gate1 = document.getElementById("gateSwitch1");
   const gate2 = document.getElementById("gateSwitch2");
@@ -262,15 +471,13 @@ document.addEventListener("DOMContentLoaded", () => {
   if (gate1) gate1.addEventListener("click", () => toggleGate("gate1"));
   if (gate2) gate2.addEventListener("click", () => toggleGate("gate2"));
 
-  // Gắn sự kiện click cho các slot buttons
-const slotBtns = document.querySelectorAll(".slot-btn");
-slotBtns.forEach((btn, index) => {
+  const slotBtns = document.querySelectorAll(".slot-btn");
+  slotBtns.forEach((btn, index) => {
     const slotId = ['A1', 'A2', 'A3', 'A4'][index];
     
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       
-      // Chỉ hiển thị thông tin, không cho đặt
       if (btn.classList.contains('available')) {
         showNotification(`Chỗ ${slotId} đang trống`, 'info');
       } else if (btn.classList.contains('reserved')) {
@@ -280,19 +487,16 @@ slotBtns.forEach((btn, index) => {
       }
     });
 
-    // Thêm cursor pointer
     btn.style.cursor = 'pointer';
   });
+  
   formatAllDates();
+  initWebSocket();
+  updateTime();
+  autoRefreshImages();
 });
 
-// Hiện frame
-function showFrame(id) {
-  document.querySelectorAll('.screen').forEach(f => f.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-}
-
-// Cập nhật ngày giờ
+// Update time
 function updateTime() {
   const now = new Date();
   const dateString = now.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -302,9 +506,8 @@ function updateTime() {
 }
 
 setInterval(updateTime, 1000);
-updateTime();
 
-// Tìm kiếm mã vé
+// Search booking
 async function searchBooking() {
   const code = document.getElementById("searchCode").value.trim();
   if (!code) return alert("Nhập mã vé trước");
@@ -334,6 +537,7 @@ async function searchBooking() {
   }
 }
 
+// Delete booking
 async function deleteBooking() {
   const code = document.getElementById("searchCode").value.trim();
   if (!code) return alert("Nhập mã vé trước");
@@ -347,7 +551,7 @@ async function deleteBooking() {
     if (!res.ok) throw new Error(data.message);
 
     alert("✅ " + data.message);
-    location.reload(); // tải lại trang để cập nhật danh sách
+    location.reload();
   } catch (err) {
     alert("❌ " + err.message);
   }
