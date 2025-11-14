@@ -3,6 +3,7 @@ const http = require('http');
 const path = require('path');
 require('dotenv').config();
 
+
 // Import configurations
 const { connectDatabase } = require('./config/database');
 const { setupHandlebars } = require('./config/handlebars');
@@ -20,6 +21,8 @@ const parkingRoutes = require('./routes/parking');
 const managerRoutes = require('./routes/manager');
 const cameraRoutes = require('./routes/camera');
 const apiRoutes = require('./routes/api');
+const bookingCameraRoutes = require('./routes/bookingCamera');
+
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -58,6 +61,7 @@ app.use('/', parkingRoutes);
 app.use('/manager', managerRoutes);
 app.use('/camera', cameraRoutes);
 app.use('/api', apiRoutes);
+app.use('/api/booking-camera', bookingCameraRoutes);
 
 // Error handling
 app.use(errorHandler);

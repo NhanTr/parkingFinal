@@ -1,25 +1,40 @@
 <link rel="stylesheet" href="/css/confirm.css">
+<link rel="stylesheet" href="/css/booking-camera.css">
+
 <div id="confirm-screen" class="screen active">
   <div class="card confirm-card">
-    <img src="img/logo.png" alt="logo">
+    <img src="/img/logo.png" alt="logo">
     <p>Smart parking system</p>
 
     <div class="content">
-      <h2> Vé đặt chỗ </h2>
-      <h3>Mã vào là: {{bookingCode}}</h3>
-      <p>Khách hàng: {{user.fullname}}</p>
-      <p><img src="img/rho.png" alt=""><strong>Bãi đỗ xe RL</strong></p>
-      <p><img src="img/location.png" alt="">97 Man Thiện, TP. Thủ Đức</p>
-      {{!-- <div class="payment-section">
-      <button id="start-payment-btn" class="button">Bắt đầu tính tiền</button>
-        <div id="payment-info" style="margin-top:10px; display:none;">
-          <p>Thời gian bắt đầu: <span id="start-time"></span></p>
-          <p>Thời gian hiện tại: <span id="current-time"></span></p>
-          <p>Tổng thời gian: <span id="elapsed-time"></span></p>
-          <p>Tiền cần thanh toán: <span id="total-amount"></span> VNĐ</p>
-        </div>
-      </div> --}}
-      <!-- Thêm div nhập ghi chú -->
+      <h2>🎫 Vé đặt chỗ</h2>
+      <h3>Mã vào: <span class="booking-code">{{bookingCode}}</span></h3>
+      
+      <div class="booking-info">
+        <p><strong>Khách hàng:</strong> {{user.fullname}}</p>
+        <p><strong>Biển số xe:</strong> {{license_plate}}</p>
+        <p><img src="/img/rho.png" alt="" width="20"><strong> Bãi đỗ xe RL</strong></p>
+        <p><img src="/img/location.png" alt="" width="20"> 97 Man Thiện, TP. Thủ Đức</p>
+      </div>
+
+      <!-- ✅ CAMERA ACTION BUTTONS -->
+      <div class="camera-actions">
+        <button id="confirmEntryBtn" class="button">
+          🚗 Xác nhận vào bãi
+        </button>
+        
+        <button id="cancelExitBtn" class="button">
+          🚙 Rời bãi (Cancel)
+        </button>
+      </div>
+
+      <!-- ✅ ENTRY RESULT -->
+      <div id="entryResult"></div>
+
+      <!-- ✅ EXIT RESULT -->
+      <div id="exitResult"></div>
+
+      <!-- GHI CHÚ SECTION -->
       <div class="note-section">
         <label for="noteInput"><strong>Ghi chú cho vé này:</strong></label>
         <textarea id="noteInput" rows="3" placeholder="Nhập ghi chú..."></textarea>
@@ -27,16 +42,30 @@
         <div id="noteStatus" style="margin-top:6px;font-size:14px;"></div>
       </div>
 
+      <!-- HƯỚNG DẪN -->
       <div class="note">  
-        <p> - Chụp ảnh màn hình để xác nhận với nhà xe.</p>
-        <p> - Nếu đến trễ hơn 30 phút, hệ thống sẽ tự động hủy chỗ.</p>
+        <h4>📌 Hướng dẫn:</h4>
+        <p>1. <strong>Vào bãi:</strong> Bấm "Xác nhận vào bãi" → Camera tự động chụp biển số</p>
+        <p>2. <strong>Ra bãi:</strong> Bấm "Rời bãi" → Camera chụp và tính tiền tự động</p>
+        <p>⚠️ Nếu đến trễ hơn 30 phút, hệ thống sẽ tự động hủy chỗ.</p>
       </div>
 
-      <a href="/parking"><button class="button"> Quay lại trang đặt chỗ </button></a>
+      <a href="/parking"><button class="button"> ⬅️ Quay lại trang đặt chỗ </button></a>
     </div>
   </div>
 </div>
-<script src="js/confirm.js"></script>
+
+<!-- ✅ LOADING OVERLAY -->
+<div id="captureLoading" class="capture-loading">
+  <div class="loading-content">
+    <div class="spinner"></div>
+    <p>Đang xử lý...</p>
+  </div>
+</div>
+
+<!-- ✅ SCRIPTS -->
 <script>
   window.bookingCode = "{{bookingCode}}";
 </script>
+<script src="/js/booking-confirm.js"></script>
+<script src="/js/confirm.js"></script>

@@ -75,6 +75,75 @@ router.post('/toggle-gate', (req, res) => {
     }
 });
 
+router.get('/manager/:code', async (req, res) => {
+    try {
+        const code = req.params.code.trim();
+        
+        console.log(`🔍 Tra cứu mã: ${code}`);
+        
+        // ✅ TÌM TRONG BOOKING TRƯỚC
+        let booking = await Booking.findOne({ bookingCode: code })
+            .populate('userId')
+            .lean();
+        
+        if (booking) {
+            console.log(`✅ Tìm thấy Booking: ${booking.bookingCode}`);
+            
+            // ✅ KIỂM TRA CÓ RFID ACCESS KHÔNG
+            const rfidAccess = await RfidAccess.findOne({ 
+                bookingCode: code 
+            }).lean();
+            
+            // Merge data nếu có
+            if (rfidAccess) {
+                booking.entryTime = rfidAccess.entryTime;
+                booking.exitTime = rfidAccess.exitTime;
+                booking.parkingFee = rfidAccess.parkingFee;
+                booking.parkingDuration = rfidAccess.parkingDuration;
+                booking.entryImageUrl = rfidAccess.entryImageUrl;
+                booking.exitImageUrl = rfidAccess.exitImageUrl;
+            }
+            
+            return res.json(booking);
+        }
+        
+        // ✅ NẾU KHÔNG TÌM THẤY TRONG BOOKING, TÌM TRONG RFID ACCESS
+        const rfidAccess = await RfidAccess.findOne({ 
+            rfidCode: code 
+        }).lean();
+        
+        if (rfidAccess) {
+            console.log(`✅ Tìm thấy RFID Access: ${rfidAccess.rfidCode}`);
+            
+            // Chuyển đổi format để frontend hiểu
+            return res.json({
+                bookingCode: rfidAccess.rfidCode,
+                license_plate: rfidAccess.licensePlateEntry,
+                status: rfidAccess.status,
+                createdAt: rfidAccess.entryTime,
+                entryTime: rfidAccess.entryTime,
+                exitTime: rfidAccess.exitTime,
+                parkingFee: rfidAccess.parkingFee,
+                parkingDuration: rfidAccess.parkingDuration,
+                entryImageUrl: rfidAccess.entryImageUrl,
+                exitImageUrl: rfidAccess.exitImageUrl,
+                userId: { fullname: 'N/A' }
+            });
+        }
+        
+        console.log(`❌ Không tìm thấy: ${code}`);
+        return res.status(404).json({ 
+            message: 'Không tìm thấy mã này' 
+        });
+        
+    } catch (error) {
+        console.error('❌ Error in lookup:', error);
+        res.status(500).json({ 
+            message: 'Lỗi server: ' + error.message 
+        });
+    }
+});
+
 // Change mode
 router.post('/change-mode', (req, res) => {
     const { mode } = req.body;
